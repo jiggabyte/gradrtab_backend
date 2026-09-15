@@ -1,0 +1,57 @@
+## -- Core .NET / Visual Studio Build Artifacts --
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ex]itCode/
+
+## -- .NET Core / Web API Specific --
+# Avoid checking in database connection strings and JWT secrets
+appsettings.Development.json
+appsettings.Local.json
+
+# User secrets file containing sensitive local credentials
+RealUserSecrets/
+.microsoft/usersecrets/
+
+## -- EF Core Migrations Tooling --
+# Keeps local SQLite or temp DB instances out of source control if used
+*.db
+*.db-shm
+*.db-wal
+
+## -- IDE & Editor Files --
+# Visual Studio
+.vs/
+*.user
+*.userosscache
+*.sln.docstates
+
+# Visual Studio Code
+.vscode/
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/tasks.json
+
+# JetBrains Rider / Resharper
+.idea/
+*.sln.iml
+
+## -- Operating System Files --
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+desktop.ini
+
+## -- Log & Performance Files --
+*.log
+*.perf
+*.etl
