@@ -1,7 +1,13 @@
 using Microsoft.EntityFrameworkCore;
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.IdentityModel.Tokens;
+using GradrTab.Configuration;
+using GradrTab.Data;
+using GradrTab.Repositories;
+using GradrTab.Services;
+using GradrTab.Services.Extraction;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -14,6 +20,30 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
 // Register DbContext to use PostgreSQL
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(connectionString));
+
+// Document upload settings (size limits, allowed extensions, OCR)
+builder.Services.Configure<DocumentProcessingOptions>(
+    builder.Configuration.GetSection(DocumentProcessingOptions.SectionName));
+
+var documentProcessingOptions = builder.Configuration
+    .GetSection(DocumentProcessingOptions.SectionName)
+    .Get<DocumentProcessingOptions>() ?? new DocumentProcessingOptions();
+
+// Make sure Kestrel and the form reader accept multipart uploads up to the configured limit
+var maxRequestBytes = documentProcessingOptions.MaxFileSizeBytes *
+                      Math.Max(1, documentProcessingOptions.MaxFilesPerRequest);
+
+builder.Services.Configure<FormOptions>(options =>
+{
+    options.MultipartBodyLengthLimit = maxRequestBytes;
+    options.ValueLengthLimit = int.MaxValue;
+    options.MultipartHeadersLengthLimit = 64 * 1024;
+});
+
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Limits.MaxRequestBodySize = maxRequestBytes;
+});
 
 // Add JWT Authentication
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
@@ -43,8 +73,21 @@ builder.Services.AddAuthentication(options =>
 builder.Services.AddOpenApi();
 
 builder.Services.AddControllers();
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
+
+// Document ingestion: file storage, optional OCR and one extractor per format
+builder.Services.AddSingleton<IFileStorageService, FileStorageService>();
+builder.Services.AddSingleton<IOcrService, TesseractOcrService>();
+builder.Services.AddSingleton<IDocumentExtractorResolver, DocumentExtractorResolver>();
+
+builder.Services.AddSingleton<IDocumentExtractor, PdfDocumentExtractor>();
+builder.Services.AddSingleton<IDocumentExtractor, WordDocumentExtractor>();
+builder.Services.AddSingleton<IDocumentExtractor, CsvDocumentExtractor>();
+builder.Services.AddSingleton<IDocumentExtractor, JsonDocumentExtractor>();
+builder.Services.AddSingleton<IDocumentExtractor, ImageDocumentExtractor>();
+builder.Services.AddSingleton<IDocumentExtractor, TextDocumentExtractor>();
+
+builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
+builder.Services.AddScoped<IDocumentProcessingService, DocumentProcessingService>();
 
 var app = builder.Build();
 

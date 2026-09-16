@@ -3,38 +3,38 @@ using System.Security.Claims;
 using System.Text;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using BC = BCrypt.Net.BCrypt;
 using GradrTab.DTOs;
 using GradrTab.Models;
+using GradrTab.Repositories;
 
 namespace GradrTab.Controllers;
 
 [ApiController]
-[Route("api/v1/[controller]")]
+[Route("api/v1/")]
 public class AuthController : ControllerBase
 {
-    private readonly AppDbContext _context;
+    private readonly IUnitOfWork _unitOfWork;
     private readonly IConfiguration _configuration;
 
-    public AuthController(AppDbContext context, IConfiguration configuration)
+    public AuthController(IUnitOfWork unitOfWork, IConfiguration configuration)
     {
-        _context = context;
+        _unitOfWork = unitOfWork;
         _configuration = configuration;
     }
 
-    [HttpGet("test")]
+    [HttpGet("health")]
     public IActionResult Test()
     {
-        return Ok("Test endpoint is working.");
+        return Ok("API is running and healthy!");
     }
 
     [HttpPost("register")]
     public async Task<ActionResult<UserResponseDto>> Register(RegisterRequestDto request)
     {
         // 1. Check if user already exists
-        if (await _context.Users.AnyAsync(u => u.Email == request.Email.ToLower()))
+        if (await _unitOfWork.Users.ExistsWithEmailAsync(request.Email.ToLower()))
         {
             return BadRequest("A user with this email already exists.");
         }
@@ -51,8 +51,8 @@ public class AuthController : ControllerBase
             PasswordHash = passwordHash
         };
 
-        _context.Users.Add(user);
-        await _context.SaveChangesAsync();
+        await _unitOfWork.Users.AddAsync(user);
+        await _unitOfWork.SaveChangesAsync();
 
         // 4. Return the safe UserResponseDto
         var response = new UserResponseDto(user.Id, user.FirstName, user.LastName, user.Email, user.CreatedAt);
@@ -63,7 +63,7 @@ public class AuthController : ControllerBase
     public async Task<ActionResult<AuthResponseDto>> Login(LoginRequestDto request)
     {
         // 1. Look up user by email
-        var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == request.Email.ToLower());
+        var user = await _unitOfWork.Users.GetByEmailAsync(request.Email.ToLower());
         if (user == null)
         {
             return Unauthorized("Invalid email or password.");

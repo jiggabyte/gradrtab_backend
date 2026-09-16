@@ -1,6 +1,94 @@
 @GradrTab_HostAddress = http://localhost:5120
+@token = PASTE_THE_JWT_FROM_THE_LOGIN_RESPONSE_HERE
+@documentId = 00000000-0000-0000-0000-000000000000
 
-GET {{GradrTab_HostAddress}}/weatherforecast/
+GET {{GradrTab_HostAddress}}/api/v1/test
 Accept: application/json
+
+###
+
+# Register a user
+POST {{GradrTab_HostAddress}}/api/v1/register
+Content-Type: application/json
+
+{
+  "firstName": "Doc",
+  "lastName": "Uploader",
+  "email": "uploader@example.com",
+  "password": "Passw0rd!"
+}
+
+###
+
+# Log in, copy the token from the response into @token above
+POST {{GradrTab_HostAddress}}/api/v1/login
+Content-Type: application/json
+
+{
+  "email": "uploader@example.com",
+  "password": "Passw0rd!"
+}
+
+###
+
+# Upload documents as multipart/form-data.
+# Repeat the field for more files, the field name can be anything.
+POST {{GradrTab_HostAddress}}/api/v1/documents
+Authorization: Bearer {{token}}
+Content-Type: multipart/form-data; boundary=----GradrTabBoundary
+
+------GradrTabBoundary
+Content-Disposition: form-data; name="files"; filename="students.csv"
+Content-Type: text/csv
+
+< ./samples/students.csv
+------GradrTabBoundary
+Content-Disposition: form-data; name="files"; filename="grades.json"
+Content-Type: application/json
+
+< ./samples/grades.json
+------GradrTabBoundary--
+
+###
+
+# Everything that was read out of one document, first 200 entries
+GET {{GradrTab_HostAddress}}/api/v1/documents/{{documentId}}/detail
+Authorization: Bearer {{token}}
+
+###
+
+# Paged entries of one document
+GET {{GradrTab_HostAddress}}/api/v1/documents/{{documentId}}/entries?page=1&pageSize=50
+Authorization: Bearer {{token}}
+
+###
+
+# List documents, optionally filtered
+GET {{GradrTab_HostAddress}}/api/v1/documents?page=1&pageSize=20&type=Pdf&status=Completed
+Authorization: Bearer {{token}}
+
+###
+
+# Search inside the stored file names and the extracted text
+GET {{GradrTab_HostAddress}}/api/v1/documents?search=grading
+Authorization: Bearer {{token}}
+
+###
+
+# Download the original upload
+GET {{GradrTab_HostAddress}}/api/v1/documents/{{documentId}}/content
+Authorization: Bearer {{token}}
+
+###
+
+# Read the stored copy again after an extractor changed
+POST {{GradrTab_HostAddress}}/api/v1/documents/{{documentId}}/reprocess
+Authorization: Bearer {{token}}
+
+###
+
+# Delete a document, its entries and the stored file
+DELETE {{GradrTab_HostAddress}}/api/v1/documents/{{documentId}}
+Authorization: Bearer {{token}}
 
 ###
