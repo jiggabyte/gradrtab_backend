@@ -10,6 +10,7 @@ bld/
 
 ## -- .NET Core / Web API Specific --
 # Avoid checking in database connection strings and JWT secrets
+.env
 appsettings.Development.json
 appsettings.Local.json
 
