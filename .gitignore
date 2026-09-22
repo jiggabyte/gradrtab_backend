@@ -10,6 +10,7 @@ bld/
 
 ## -- .NET Core / Web API Specific --
 # Avoid checking in database connection strings and JWT secrets
+.env
 appsettings.Development.json
 appsettings.Local.json
 
@@ -22,6 +23,10 @@ RealUserSecrets/
 *.db
 *.db-shm
 *.db-wal
+
+## -- Uploaded Documents --
+# Original uploads are stored on disk, keep them out of source control
+Storage/
 
 ## -- IDE & Editor Files --
 # Visual Studio

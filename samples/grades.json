@@ -1,0 +1,11 @@
+{
+  "institution": "GradrTab Academy",
+  "term": "2026-First",
+  "gradingScale": [
+    { "grade": "A", "minScore": 90 },
+    { "grade": "B", "minScore": 80 },
+    { "grade": "C", "minScore": 70 }
+  ],
+  "active": true,
+  "maxStudentsPerClass": 250
+}
