@@ -27,7 +27,7 @@ public class AuthControllerTests
     {
         var (controller, uow) = CreateController();
 
-        var result = await controller.Register(new RegisterRequestDto("Ada", "Lovelace", "Ada@Example.com", "password123"));
+        var result = await controller.Register(new RegisterRequestDto("Ada", "Lovelace", "Ada@example.com", "password123"));
 
         var created = Assert.IsType<CreatedAtActionResult>(result.Result);
         var user = Assert.IsType<UserResponseDto>(created.Value);
@@ -39,9 +39,9 @@ public class AuthControllerTests
     public async Task Register_RejectsDuplicateEmail()
     {
         var (controller, _) = CreateController();
-        await controller.Register(new RegisterRequestDto("Ada", "L", "ada@example.com", "password123"));
+        await controller.Register(new RegisterRequestDto("Ada", "Lovelace", "ada@example.com", "password123"));
 
-        var result = await controller.Register(new RegisterRequestDto("Ada", "L", "ada@example.com", "password123"));
+        var result = await controller.Register(new RegisterRequestDto("Ada", "Lovelace", "ada@example.com", "password123"));
 
         Assert.IsType<BadRequestObjectResult>(result.Result);
     }
@@ -50,7 +50,7 @@ public class AuthControllerTests
     public async Task Login_ReturnsTokenForValidCredentials()
     {
         var (controller, _) = CreateController();
-        await controller.Register(new RegisterRequestDto("Ada", "L", "ada@example.com", "password123"));
+        await controller.Register(new RegisterRequestDto("Ada", "Lovelace", "ada@example.com", "password123"));
 
         var result = await controller.Login(new LoginRequestDto("ada@example.com", "password123"));
 
@@ -63,7 +63,7 @@ public class AuthControllerTests
     public async Task Login_RejectsWrongPassword()
     {
         var (controller, _) = CreateController();
-        await controller.Register(new RegisterRequestDto("Ada", "L", "ada@example.com", "password123"));
+        await controller.Register(new RegisterRequestDto("Ada", "Lovelace", "ada@example.com", "password123"));
 
         var result = await controller.Login(new LoginRequestDto("ada@example.com", "wrong"));
 

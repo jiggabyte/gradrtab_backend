@@ -129,8 +129,12 @@ public class PasswordResetServiceTests
 
         var result = await service.RequestResetAsync(user.Email);
 
-        Assert.False(result.Succeeded);
-        Assert.Equal(502, result.StatusCode);
+        // A delivery failure must not become a distinguishable answer, that
+        // would tell the caller that this address has an account.
+        Assert.True(result.Succeeded);
+        Assert.False(result.EmailSent);
+        Assert.Equal(202, result.StatusCode);
+        Assert.Null(result.ErrorMessage);
 
         // The burn has to reach the database, not just the change tracker. Two
         // saves happen on this path: one for the new row, one for the burn.
@@ -141,6 +145,28 @@ public class PasswordResetServiceTests
         Assert.NotNull(token);
         var completion = await service.CompleteResetAsync(token!, "brandNewPassword1");
         Assert.Equal(PasswordResetStatus.InvalidToken, completion.Status);
+    }
+
+    [Fact]
+    public async Task RequestReset_AnswersIdenticallyWhenTheMailFailsAndWhenTheAddressIsUnknown()
+    {
+        var knownUow = new InMemoryUnitOfWork();
+        var knownUser = TestHelpers.SeedUser(knownUow);
+        var failing = TestHelpers.CreatePasswordResetService(
+            knownUow,
+            new FakeEmailSender { FailNextSend = true });
+
+        var unknownUow = new InMemoryUnitOfWork();
+        var unknown = TestHelpers.CreatePasswordResetService(unknownUow, new FakeEmailSender());
+
+        var afterFailure = await failing.RequestResetAsync(knownUser.Email);
+        var afterUnknown = await unknown.RequestResetAsync("nobody@example.com");
+
+        // Nothing about the response may reveal that one address is registered
+        Assert.Equal(afterUnknown.StatusCode, afterFailure.StatusCode);
+        Assert.Equal(afterUnknown.Succeeded, afterFailure.Succeeded);
+        Assert.Equal(afterUnknown.EmailSent, afterFailure.EmailSent);
+        Assert.Equal(afterUnknown.ErrorMessage, afterFailure.ErrorMessage);
     }
 
     [Fact]

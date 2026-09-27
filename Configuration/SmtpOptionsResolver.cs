@@ -3,7 +3,11 @@ namespace GradrTab.Configuration;
 /// <summary>
 /// Fills the Smtp section from friendlier environment variables, the same way
 /// DbConnectionResolver accepts DB_* next to the standard config keys.
-/// Priority: Smtp__Host (configuration) > SMTP_HOST (environment).
+/// Priority: SMTP_* (environment) > Smtp__* (configuration) > appsettings.json.
+/// The environment has to win, otherwise the built in defaults would mask a
+/// missing setting: Host defaults to something non empty, so an appsettings
+/// value (or that default) would always beat SMTP_HOST and the process would
+/// quietly talk to localhost instead of the relay the dashboard configured.
 /// </summary>
 public static class SmtpOptionsResolver
 {
@@ -29,16 +33,19 @@ public static class SmtpOptionsResolver
         }
     }
 
+    // The real environment variable wins over configuration. Values copied
+    // straight out of appsettings.Example.json ("<add password here>") are
+    // treated as not set, so a placeholder can never be sent as a credential.
     private static string First(string? configured, string variableName)
     {
-        if (!string.IsNullOrWhiteSpace(configured))
-        {
-            return configured;
-        }
-
         var fromEnvironment = Environment.GetEnvironmentVariable(variableName);
 
-        return string.IsNullOrWhiteSpace(fromEnvironment) ? configured ?? string.Empty : fromEnvironment.Trim();
+        if (!string.IsNullOrWhiteSpace(fromEnvironment))
+        {
+            return fromEnvironment.Trim();
+        }
+
+        return string.IsNullOrWhiteSpace(configured) || IsPlaceholder(configured) ? string.Empty : configured.Trim();
     }
 
     private static int? FirstInt(int configured, string variableName)
@@ -54,4 +61,9 @@ public static class SmtpOptionsResolver
 
         return bool.TryParse(raw, out var parsed) ? parsed : configured;
     }
+
+    // appsettings.Example.json ships the secrets as <add password here> and the
+    // AI key as <api-key-here>. Anything in angle brackets is a template value.
+    private static bool IsPlaceholder(string value) =>
+        value.Trim().StartsWith('<') && value.Trim().EndsWith('>');
 }

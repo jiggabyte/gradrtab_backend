@@ -105,7 +105,11 @@ public sealed class PasswordResetService : IPasswordResetService
 
             _logger.LogWarning("Password reset mail for {Email} could not be sent: {Error}", normalized, result.ErrorMessage);
 
-            return new PasswordResetRequestResult(false, false, result.ErrorMessage, StatusCodes.Status502BadGateway);
+            // Still the accepted answer. A failure here is only known because the
+            // address exists, so reporting it would turn this endpoint into a way
+            // of finding out who has an account. The reason is in the log, the
+            // caller only ever sees the same 202 as for an unknown address.
+            return PasswordResetRequestResult.Accepted(emailSent: false);
         }
 
         _logger.LogInformation("Password reset link sent to {Email}, valid for {Minutes} minutes", normalized, _options.TokenLifetimeMinutes);

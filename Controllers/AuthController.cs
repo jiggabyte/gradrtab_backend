@@ -116,13 +116,15 @@ public class AuthController : ControllerBase
 
     // POST /api/v1/forgot-password
     // Always answers 202 with the same message, whether or not the address is
-    // registered, so this cannot be used to find out which emails have accounts.
+    // registered and whether or not the mail could be delivered, so this cannot
+    // be used to find out which emails have accounts. 503 is reserved for the
+    // one case that does not depend on the address: SMTP is not configured.
     [HttpPost("forgot-password")]
     public async Task<IActionResult> ForgotPassword(ForgotPasswordRequestDto request)
     {
         var result = await _passwordResetService.RequestResetAsync(request.Email);
 
-        // 503 means SMTP is not configured, that is a server problem worth showing
+        // 503 means SMTP is not configured at all, that is a server problem worth showing
         if (!result.Succeeded)
         {
             return StatusCode(result.StatusCode, new { message = result.ErrorMessage });

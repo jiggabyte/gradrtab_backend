@@ -12,7 +12,8 @@ public class SmtpOptions
 
     public string Host { get; set; } = "localhost";
 
-    // 587 is the usual submission port, 465 is the implicit TLS one
+    // 587 is the STARTTLS submission port. SmtpClient cannot do the implicit
+    // TLS of 465, so 587 is the only usable choice here.
     public int Port { get; set; } = 587;
 
     // STARTTLS on 587, set to false when talking to a local relay such as MailHog

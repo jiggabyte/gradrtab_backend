@@ -75,6 +75,18 @@ public class PasswordResetEndpointTests
     }
 
     [Fact]
+    public async Task ForgotPassword_StillAnswersAcceptedWhenTheMailCannotBeDelivered()
+    {
+        var (controller, _, _) = CreateController(email => email.FailNextSend = true);
+
+        var result = await controller.ForgotPassword(new ForgotPasswordRequestDto { Email = "ada@example.com" });
+
+        // Not a 5xx: the caller cannot tell a delivery failure apart from the
+        // accepted answer, so registered addresses stay unguessable.
+        Assert.IsType<AcceptedResult>(result);
+    }
+
+    [Fact]
     public async Task ResetPassword_ChangesThePasswordSoLoginWorks()
     {
         var (controller, uow, email) = CreateController();

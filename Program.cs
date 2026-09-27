@@ -168,6 +168,25 @@ app.UseForwardedHeaders();
 using (var scope = app.Services.CreateScope())
 {
     var startupLogger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("Startup");
+
+    // forgot-password answers 202 whether or not the mail went out, so a broken
+    // SMTP setup has to be visible here. The password is never logged.
+    var smtp = scope.ServiceProvider.GetRequiredService<IOptions<SmtpOptions>>().Value;
+    var emailSender = scope.ServiceProvider.GetRequiredService<IEmailSender>();
+
+    if (emailSender.IsAvailable)
+    {
+        startupLogger.LogInformation(
+            "SMTP is configured for {Host}:{Port} (starttls: {EnableSsl}), sending as {FromEmail}",
+            smtp.Host, smtp.Port, smtp.EnableSsl, smtp.FromEmail);
+    }
+    else
+    {
+        startupLogger.LogWarning(
+            "SMTP is not usable, POST /api/v1/forgot-password will answer 503. Reason: {Reason}",
+            emailSender.UnavailableReason);
+    }
+
     try
     {
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();

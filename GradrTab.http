@@ -46,7 +46,7 @@ POST {{GradrTab_HostAddress}}/api/v1/forgot-password
 Content-Type: application/json
 
 {
-  "email": "uploader@yopmail.com"
+  "email": "jigga.e10@gmail.com"
 }
 
 ###

@@ -10,6 +10,10 @@ namespace GradrTab.Services;
 // required; a username is optional for relays that do not authenticate.
 public sealed class SmtpEmailSender : IEmailSender
 {
+    // SMTPS, the port where TLS is negotiated before the SMTP greeting. The
+    // SmtpClient in the base class library only speaks STARTTLS.
+    private const int ImplicitTlsPort = 465;
+
     private readonly SmtpOptions _options;
     private readonly ILogger<SmtpEmailSender> _logger;
 
@@ -23,6 +27,10 @@ public sealed class SmtpEmailSender : IEmailSender
         _options.Enabled &&
         !string.IsNullOrWhiteSpace(_options.Host) &&
         _options.Port is > 0 and <= 65535 &&
+        // SmtpClient can only do STARTTLS, never the implicit TLS of port 465.
+        // Silently ignoring the setting would fail later inside the handshake,
+        // so a 465 is reported as a configuration problem instead.
+        _options.Port != ImplicitTlsPort &&
         !string.IsNullOrWhiteSpace(_options.FromEmail);
 
     public string? UnavailableReason
@@ -42,6 +50,11 @@ public sealed class SmtpEmailSender : IEmailSender
             if (_options.Port is <= 0 or > 65535)
             {
                 return $"The configured SMTP port ({_options.Port}) is not a valid port number.";
+            }
+
+            if (_options.Port == ImplicitTlsPort)
+            {
+                return "The SMTP port 465 needs implicit TLS, which System.Net.Mail.SmtpClient does not support. Use port 587 (STARTTLS) instead.";
             }
 
             if (string.IsNullOrWhiteSpace(_options.FromEmail))
@@ -85,8 +98,11 @@ public sealed class SmtpEmailSender : IEmailSender
 
             message.To.Add(new MailAddress(toEmail.Trim()));
 
+            Console.WriteLine($"Sending email to {toEmail} via {_options.Host}:{_options.Port}, SSL={_options.EnableSsl}");
+
             using var client = new SmtpClient(_options.Host, _options.Port)
             {
+               
                 EnableSsl = _options.EnableSsl,
                 DeliveryMethod = SmtpDeliveryMethod.Network,
                 Timeout = Math.Clamp(_options.TimeoutSeconds, 1, 300) * 1000
