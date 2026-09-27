@@ -1,0 +1,210 @@
+@GradrTab_HostAddress = http://localhost:5120
+@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1laWRlbnRpZmllciI6IjE5OWM2ZDVlLTIwYzgtNDRiYi04MDViLTlhYTkxNDVmNGIxMiIsImh0dHA6Ly9zY2hlbWFzLnhtbHNvYXAub3JnL3dzLzIwMDUvMDUvaWRlbnRpdHkvY2xhaW1zL2VtYWlsYWRkcmVzcyI6ImppZ2dhLmUxMEBnbWFpbC5jb20iLCJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9naXZlbm5hbWUiOiJKaWdnYSIsImh0dHA6Ly9zY2hlbWFzLnhtbHNvYXAub3JnL3dzLzIwMDUvMDUvaWRlbnRpdHkvY2xhaW1zL3N1cm5hbWUiOiJCeXRlIiwiZXhwIjoxNzkwNTA0MjQ2LCJpc3MiOiJHcmFkclRhYiIsImF1ZCI6IkdyYWRyVGFiVXNlcnMifQ.IjVWaVmj7XsBrfoPmLDf4ro_BfMJ4BQnvprqFn0G3YU
+@documentId = 0384ee4c-56be-461a-89f7-fecc51546b42
+@resetToken = paste-the-token-from-the-emailed-link-here
+@rubricId = 00000000-0000-0000-0000-000000000000
+GET {{GradrTab_HostAddress}}/api/v1/health
+Accept: application/json
+
+###
+
+# Register a user
+POST {{GradrTab_HostAddress}}/api/v1/register
+Content-Type: application/json
+
+{
+  "firstName": "Jigga",
+  "lastName": "Byte",
+  "email": "jigga.e10@gmail.com",
+  "password": "Passw0rd!"
+}
+
+###
+
+# Log in, copy the token from the response into @token above
+POST {{GradrTab_HostAddress}}/api/v1/login
+Content-Type: application/json
+
+{
+  "email": "jigga.e10@gmail.com",
+  "password": "Passw0rd!"
+}
+
+###
+
+# Get user details
+GET {{GradrTab_HostAddress}}/api/v1/me
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+###
+
+# Ask for a password reset link. The answer is always 202, whether or not the
+# address has an account. The link arrives by email, copy its ?token= value
+# into @resetToken below.
+POST {{GradrTab_HostAddress}}/api/v1/forgot-password
+Content-Type: application/json
+
+{
+  "email": "uploader@yopmail.com"
+}
+
+###
+
+# Set the new password with the token from the emailed link
+POST {{GradrTab_HostAddress}}/api/v1/reset-password
+Content-Type: application/json
+
+{
+  "token": "{{resetToken}}",
+  "newPassword": "Str0ngerPassw0rd!",
+  "confirmPassword": "Str0ngerPassw0rd!"
+}
+
+###
+
+# Log in again with the new password
+POST {{GradrTab_HostAddress}}/api/v1/login
+Content-Type: application/json
+
+{
+  "email": "uploader@yopmail.com",
+  "password": "Str0ngerPassw0rd!"
+}
+
+###
+
+# Upload documents as multipart/form-data.
+# Repeat the field for more files, the field name can be anything.
+POST {{GradrTab_HostAddress}}/api/v1/documents
+Authorization: Bearer {{token}}
+Content-Type: multipart/form-data; boundary=----GradrTabBoundary
+
+------GradrTabBoundary
+Content-Disposition: form-data; name="files"; filename="students.csv"
+Content-Type: text/csv
+
+< ./samples/students.csv
+------GradrTabBoundary--  
+
+###
+
+# Everything that was read out of one document, first 200 entries
+GET {{GradrTab_HostAddress}}/api/v1/documents/{{documentId}}/detail
+Authorization: Bearer {{token}}
+
+###
+
+# Paged entries of one document
+GET {{GradrTab_HostAddress}}/api/v1/documents/{{documentId}}/entries?page=1&pageSize=50
+Authorization: Bearer {{token}}
+
+###
+
+# List documents, optionally filtered
+GET {{GradrTab_HostAddress}}/api/v1/documents?page=1&pageSize=20&type=Pdf&status=Completed
+Authorization: Bearer {{token}}
+
+###
+
+# Search inside the stored file names and the extracted text
+GET {{GradrTab_HostAddress}}/api/v1/documents?search=grading
+Authorization: Bearer {{token}}
+
+###
+
+# Download the original upload
+GET {{GradrTab_HostAddress}}/api/v1/documents/{{documentId}}/content
+Authorization: Bearer {{token}}
+
+###
+
+# Read the stored copy again after an extractor changed
+POST {{GradrTab_HostAddress}}/api/v1/documents/{{documentId}}/reprocess
+Authorization: Bearer {{token}}
+
+###
+
+# Delete a document, its entries and the stored file
+DELETE {{GradrTab_HostAddress}}/api/v1/documents/{{documentId}}
+Authorization: Bearer {{token}}
+
+###
+
+# ---- Rubrics ----
+
+# Submit a rubric. The id/title/criteria shape is exactly what the frontend
+# sends. The server adds maxPoints, criterionCount and a database id.
+# Submitting the same "id" again replaces the stored rubric.
+POST {{GradrTab_HostAddress}}/api/v1/rubrics
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+< ./samples/rubric_schema.json
+
+###
+
+# Every stored rubric of the signed in user
+GET {{GradrTab_HostAddress}}/api/v1/rubrics?page=1&pageSize=20
+Authorization: Bearer {{token}}
+
+###
+
+# One rubric with its criteria and levels
+GET {{GradrTab_HostAddress}}/api/v1/rubrics/by-key/rub_essay
+Authorization: Bearer {{token}}
+
+###
+
+# Delete a rubric
+DELETE {{GradrTab_HostAddress}}/api/v1/rubrics/{{rubricId}}
+Authorization: Bearer {{token}}
+
+###
+
+# ---- AI (OpenRouter) ----
+
+# Is a provider key configured? Lets a frontend hide the AI features
+GET {{GradrTab_HostAddress}}/api/v1/ai/status
+Authorization: Bearer {{token}}
+
+###
+
+# The shortest possible question
+POST {{GradrTab_HostAddress}}/api/v1/ai/chat
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "prompt": "What is the meaning of life?"
+}
+
+###
+
+# A system prompt, a model override and a token budget
+POST {{GradrTab_HostAddress}}/api/v1/ai/chat
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "systemPrompt": "You grade student essays. Answer with JSON only.",
+  "prompt": "Grade this thesis: 'Social media shortens attention spans.'",
+  "temperature": 0.2,
+  "maxTokens": 500
+}
+
+###
+
+# A whole conversation, the messages are sent to the provider as they are
+POST {{GradrTab_HostAddress}}/api/v1/ai/chat
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "messages": [
+    { "role": "user", "content": "Name three rubric criteria for an essay." }
+  ]
+}
+
+###
+

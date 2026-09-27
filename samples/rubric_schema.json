@@ -1,0 +1,33 @@
+{
+  "id": "rub_essay",
+  "title": "Research Essay",
+  "criteria": [
+    {
+      "id": "thesis",
+      "name": "Thesis & Argument",
+      "levels": [
+        { "label": "Strong",   "points": 40, "description": "Clear, arguable thesis sustained throughout." },
+        { "label": "Adequate", "points": 25, "description": "Thesis present but unevenly supported." },
+        { "label": "Weak",     "points": 10, "description": "No clear thesis." }
+      ]
+    },
+    {
+      "id": "evidence",
+      "name": "Evidence",
+      "levels": [
+        { "label": "Strong",   "points": 40, "description": "Credible sources, analysed rather than just quoted." },
+        { "label": "Adequate", "points": 25, "description": "Relevant sources, little analysis." },
+        { "label": "Weak",     "points": 10, "description": "Little or no evidence." }
+      ]
+    },
+    {
+      "id": "mechanics",
+      "name": "Grammar & Citations",
+      "levels": [
+        { "label": "Strong",   "points": 20, "description": "Error-free; citations correct." },
+        { "label": "Adequate", "points": 12, "description": "Minor errors; citations mostly correct." },
+        { "label": "Weak",     "points": 5,  "description": "Frequent errors; citations missing." }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,67 @@
+# Render Blueprint: GradrTab API (Docker) + Managed Postgres
+# Deploy: push to GitHub -> Render dashboard -> New -> Blueprint -> select repo.
+# Docs: https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: gradrtab-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: starter
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      # Render injects PORT automatically; app binds Kestrel to it.
+      - key: DATABASE_URL
+        fromDatabase:
+          name: postgres
+          property: connectionString
+      - key: JwtSettings__Secret
+        sync: false # set in dashboard -> keep secret out of git
+      - key: JwtSettings__Issuer
+        value: GradrTab
+      - key: JwtSettings__Audience
+        value: GradrTabUsers
+      - key: JwtSettings__DurationInMinutes
+        value: "60"
+      - key: DB_SSLMODE
+        value: Require
+      # AI provider (OpenRouter). Without it the app still starts, the AI
+      # endpoints answer 503 and /api/v1/ai/status reports isConfigured = false.
+      - key: OPENROUTER_API_KEY
+        sync: false # set in dashboard -> keep the key out of git
+      - key: Ai__SiteUrl
+        sync: false # optional, used for the openrouter.ai leaderboard
+      - key: Ai__SiteName
+        value: GradrTab
+      # Password reset delivery. Without SMTP the app still runs and
+      # /api/v1/forgot-password answers 503 with the missing setting.
+      - key: SMTP_HOST
+        sync: false # e.g. smtp.gmail.com, smtp.brevo.com, ...
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_ENABLE_SSL
+        value: "true"
+      - key: SMTP_USERNAME
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false # set in dashboard -> keep the app password out of git
+      - key: SMTP_FROM_EMAIL
+        sync: false # must be a sender the relay is allowed to use
+      - key: SMTP_FROM_NAME
+        value: GradrTab
+      # The frontend page the emailed link points at
+      - key: PasswordReset__FrontendBaseUrl
+        sync: false
+    disk:
+      name: gradrtab-uploads
+      mountPath: /app/Storage
+      sizeGB: 1
+
+databases:
+  - name: postgres
+    plan: starter
+    databaseName: postgres
+    user: postgres

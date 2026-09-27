@@ -1,0 +1,4 @@
+student_id,full_name,email,course,score_math,score_science
+1001,Ada Lovelace,ada@example.com,Computer Science,95,91
+1002,Alan Turing,alan@example.com,Mathematics,88,97
+1003,Grace Hopper,grace@example.com,Computer Science,92,89
