@@ -15,6 +15,15 @@ namespace GradrTab.Tests.Support;
 
 public static class TestHelpers
 {
+    // Comfortably over the minimum the grading service insists on
+    private const string DefaultAssessment =
+        "Rising prices squeeze the household budget long before the headline " +
+        "inflation rate makes the news. This essay argues that the burden falls " +
+        "unevenly, because rent and energy are fixed costs that cannot be traded " +
+        "away. The evidence is drawn from the 2025 household expenditure survey " +
+        "and from three regional case studies, which show the same pattern in " +
+        "both urban and rural districts. Citations are given in the appendix.";
+
     public static DocumentProcessingOptions DefaultOptions() => new()
     {
         MaxFileSizeBytes = 10 * 1024 * 1024,
@@ -62,61 +71,127 @@ public static class TestHelpers
             Options.Create(options ?? DefaultPasswordResetOptions()),
             NullLogger<PasswordResetService>.Instance);
 
-    public static RubricOptions DefaultRubricOptions() => new()
+    public static IRubricService CreateRubricService(InMemoryUnitOfWork unitOfWork) =>
+        new RubricService(unitOfWork, NullLogger<RubricService>.Instance);
+
+    public static ISubmissionService CreateSubmissionService(InMemoryUnitOfWork unitOfWork) =>
+        new SubmissionService(unitOfWork, NullLogger<SubmissionService>.Instance);
+
+    public static IGradingService CreateGradingService(
+        InMemoryUnitOfWork unitOfWork,
+        FakeAiService aiService,
+        AiOptions? options = null) =>
+        new GradingService(
+            unitOfWork,
+            aiService,
+            Options.Create(options ?? DefaultGradingAiOptions()),
+            NullLogger<GradingService>.Instance);
+
+    // The shared Ai test default allows 1 000 characters, which the grading
+    // prompt does not even fit into, so grading uses the limit appsettings ships
+    public static AiOptions DefaultGradingAiOptions()
     {
-        MaxCriteriaPerRubric = 50,
-        MaxLevelsPerCriterion = 10,
+        var options = DefaultAiOptions();
+        options.MaxRequestCharacters = 100_000;
+        return options;
+    }
+
+    // Mirrors the other controller tests: the controller reads the user id from
+    // the claims, so a test can pretend to be signed in or not
+    public static SubmissionsController CreateSubmissionsController(
+        InMemoryUnitOfWork unitOfWork,
+        FakeAiService? aiService = null,
+        Guid? userId = null) =>
+        TestHelpers.AttachUser(
+            new SubmissionsController(
+                CreateSubmissionService(unitOfWork),
+                CreateGradingService(unitOfWork, aiService ?? FakeAiService.AnsweringWith("{}")),
+                NullLogger<SubmissionsController>.Instance),
+            userId);
+
+    // Puts a name identifier claim on the controller context
+    public static T AttachUser<T>(T controller, Guid? userId) where T : ControllerBase
+    {
+        var claims = new List<Claim>();
+        if (userId is not null)
+        {
+            claims.Add(new Claim(ClaimTypes.NameIdentifier, userId.Value.ToString()));
+        }
+
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext
+            {
+                User = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"))
+            }
+        };
+
+        return controller;
+    }
+
+    // A rubric plus an uploaded assessment long enough to be graded, filed
+    // together as one submission
+    public static (Guid SubmissionId, Rubric Rubric, Submission Submission) SeedGradableSubmission(
+        InMemoryUnitOfWork unitOfWork,
+        Guid userId,
+        string? assessmentText = null)
+    {
+        var rubric = new Rubric
+        {
+            CourseName = "Economics",
+            CourseId = "ECON-101",
+            RubricContent = "Criteria: Thesis 40, Evidence 40, Mechanics 20",
+            UploadedByUserId = userId,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        unitOfWork.Rubrics.AddAsync(rubric).GetAwaiter().GetResult();
+
+        var document = SeedDocument(unitOfWork, userId, text: assessmentText ?? DefaultAssessment);
+
+        var submission = new Submission
+        {
+            RubricId = rubric.Id,
+            DocumentId = document.Id,
+            StudentId = "S-1001",
+            StudentName = "Ada Lovelace",
+            GradingStatus = GradeState.NotStarted,
+            UploadedByUserId = userId,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        unitOfWork.Submissions.AddAsync(submission).GetAwaiter().GetResult();
+        unitOfWork.SaveChangesAsync().GetAwaiter().GetResult();
+
+        return (submission.Id, rubric, submission);
+    }
+
+    // The payload a client sends to create or to update a rubric
+    public static RubricWriteDto SampleRubric() => new()
+    {
+        CourseName = "Economics",
+        CourseId = "ECON-101",
+        RubricContent =
+            """
+            {
+              "criteria": [
+                { "id": "thesis", "name": "Thesis & Argument", "points": 40 },
+                { "id": "evidence", "name": "Evidence", "points": 40 },
+                { "id": "mechanics", "name": "Grammar & Citations", "points": 20 }
+              ]
+            }
+            """
     };
 
-    public static IRubricService CreateRubricService(
-        InMemoryUnitOfWork unitOfWork,
-        RubricOptions? options = null) =>
-        new RubricService(
-            unitOfWork,
-            Options.Create(options ?? DefaultRubricOptions()),
-            NullLogger<RubricService>.Instance);
-
-    // The payload the frontend submits, matching samples/rubric_schema.json
-    public static RubricSubmissionDto SampleRubric() => new()
+    // The payload a client sends to create or to update a submission
+    public static SubmissionWriteDto SampleSubmission(Guid? rubricId = null, Guid? documentId = null) => new()
     {
-        Id = "rub_essay",
-        Title = "Research Essay",
-        Criteria =
-        [
-            new RubricCriterionDto
-            {
-                Id = "thesis",
-                Name = "Thesis & Argument",
-                Levels =
-                [
-                    new RubricLevelDto { Label = "Strong", Points = 40, Description = "Clear, arguable thesis sustained throughout." },
-                    new RubricLevelDto { Label = "Adequate", Points = 25, Description = "Thesis present but unevenly supported." },
-                    new RubricLevelDto { Label = "Weak", Points = 10, Description = "No clear thesis." }
-                ]
-            },
-            new RubricCriterionDto
-            {
-                Id = "evidence",
-                Name = "Evidence",
-                Levels =
-                [
-                    new RubricLevelDto { Label = "Strong", Points = 40, Description = "Credible sources, analysed rather than just quoted." },
-                    new RubricLevelDto { Label = "Adequate", Points = 25, Description = "Relevant sources, little analysis." },
-                    new RubricLevelDto { Label = "Weak", Points = 10, Description = "Little or no evidence." }
-                ]
-            },
-            new RubricCriterionDto
-            {
-                Id = "mechanics",
-                Name = "Grammar & Citations",
-                Levels =
-                [
-                    new RubricLevelDto { Label = "Strong", Points = 20, Description = "Error-free; citations correct." },
-                    new RubricLevelDto { Label = "Adequate", Points = 12, Description = "Minor errors; citations mostly correct." },
-                    new RubricLevelDto { Label = "Weak", Points = 5, Description = "Frequent errors; citations missing." }
-                ]
-            }
-        ]
+        RubricId = rubricId,
+        DocumentId = documentId,
+        StudentId = "S-1001",
+        StudentName = "Ada Lovelace",
     };
 
     public static User SeedUser(InMemoryUnitOfWork uow, string email = "ada@example.com", string password = "oldPassword123")

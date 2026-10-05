@@ -1,60 +1,48 @@
 using GradrTab.DTOs;
-using GradrTab.Models;
 using GradrTab.Repositories;
 
 namespace GradrTab.Services;
 
-// Stores the rubrics the frontend submits. Problems are reported on the result
-// instead of thrown, so one bad rubric cannot fail a whole batch.
+// CRUD over the rubrics a user owns. Every call is scoped to the signed in user
+// and the rubric is stored as it was submitted, the server only owns the owner
+// and the timestamps.
 public interface IRubricService
 {
-    Task<RubricSubmissionResult> SubmitAsync(
-        RubricSubmissionDto submission,
-        Guid? userId,
+    Task<RubricResponseDto> CreateAsync(
+        RubricWriteDto rubric,
+        Guid userId,
         CancellationToken cancellationToken = default);
 
-    Task<RubricResponseDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
-
-    Task<RubricResponseDto?> GetByKeyAsync(
-        string rubricKey,
-        Guid? userId = null,
+    Task<RubricResponseDto?> GetByIdAsync(
+        Guid id,
+        Guid userId,
         CancellationToken cancellationToken = default);
 
     Task<PagedResultDto<RubricSummaryDto>> ListAsync(
-        Guid? userId,
+        Guid userId,
         int page,
         int pageSize,
         CancellationToken cancellationToken = default);
 
-    // Removes one rubric, a null userId deletes any rubric, otherwise the owner
-    // has to match. Returns false when there was nothing to delete.
-    Task<bool> DeleteAsync(
+    Task<RubricWriteResult> UpdateAsync(
         Guid id,
-        Guid? userId = null,
+        RubricWriteDto rubric,
+        Guid userId,
+        CancellationToken cancellationToken = default);
+
+    Task<RubricWriteResult> DeleteAsync(
+        Guid id,
+        Guid userId,
         CancellationToken cancellationToken = default);
 }
 
-public sealed record RubricSubmissionResult(
-    bool Succeeded,
-    RubricResponseDto? Rubric,
-    IReadOnlyList<string> Errors,
-    bool Conflict)
+// Outcome of an update or a delete. A rubric owned by somebody else is reported
+// exactly like one that does not exist, so the api never confirms it is there.
+public sealed record RubricWriteResult(bool Succeeded, RubricResponseDto? Rubric)
 {
-    public static RubricSubmissionResult Success(RubricResponseDto rubric) =>
-        new(true, rubric, [], false);
+    public static RubricWriteResult Applied(RubricResponseDto rubric) =>
+        new(true, rubric);
 
-    public static RubricSubmissionResult Invalid(IReadOnlyList<string> errors) =>
-        new(false, null, errors, false);
-
-    public static RubricSubmissionResult Duplicate(string key) =>
-        new(false, null, [$"A rubric with the id '{key}' was already submitted."], true);
+    public static RubricWriteResult NotFound() =>
+        new(false, null);
 }
-
-// Compact entry for the list endpoint, without the nested criteria
-public record RubricSummaryDto(
-    Guid Id,
-    string RubricKey,
-    string Title,
-    int MaxPoints,
-    int CriterionCount,
-    DateTime CreatedAt);

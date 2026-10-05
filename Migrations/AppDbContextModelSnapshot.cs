@@ -187,24 +187,22 @@ namespace GradrTab.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("CriterionCount")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("MaxPoints")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("RubricKey")
+                    b.Property<string>("CourseId")
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
-                    b.Property<string>("Title")
+                    b.Property<string>("CourseName")
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("RubricContent")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -216,73 +214,65 @@ namespace GradrTab.Migrations
 
                     b.HasIndex("CreatedAt");
 
-                    b.HasIndex("UploadedByUserId", "RubricKey")
-                        .IsUnique();
+                    b.HasIndex("UploadedByUserId");
 
                     b.ToTable("Rubrics");
                 });
 
-            modelBuilder.Entity("GradrTab.Models.RubricCriterion", b =>
+            modelBuilder.Entity("GradrTab.Models.Submission", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<string>("CriterionKey")
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("DocumentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Evaluation")
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("FailureReason")
                         .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+                        .HasColumnType("text");
 
-                    b.Property<int>("MaxPoints")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Name")
+                    b.Property<string>("GradingStatus")
                         .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
-                    b.Property<int>("Order")
-                        .HasColumnType("integer");
+                    b.Property<Guid?>("RubricId")
+                        .HasColumnType("uuid");
 
-                    b.Property<Guid>("RubricId")
+                    b.Property<string>("StudentId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("StudentName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("UploadedByUserId")
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("RubricId", "Order");
+                    b.HasIndex("CreatedAt");
 
-                    b.ToTable("RubricCriteria");
-                });
+                    b.HasIndex("DocumentId");
 
-            modelBuilder.Entity("GradrTab.Models.RubricLevel", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+                    b.HasIndex("UploadedByUserId");
 
-                    b.Property<Guid>("CriterionId")
-                        .HasColumnType("uuid");
+                    b.HasIndex("RubricId", "CreatedAt");
 
-                    b.Property<string>("Description")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
+                    b.HasIndex("StudentId", "CreatedAt");
 
-                    b.Property<string>("Label")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<int>("Order")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("Points")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CriterionId", "Order");
-
-                    b.ToTable("RubricLevels");
+                    b.ToTable("Submissions");
                 });
 
             modelBuilder.Entity("GradrTab.Models.User", b =>
@@ -365,41 +355,33 @@ namespace GradrTab.Migrations
                     b.Navigation("UploadedBy");
                 });
 
-            modelBuilder.Entity("GradrTab.Models.RubricCriterion", b =>
+            modelBuilder.Entity("GradrTab.Models.Submission", b =>
                 {
+                    b.HasOne("GradrTab.Models.Document", "Document")
+                        .WithMany()
+                        .HasForeignKey("DocumentId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("GradrTab.Models.Rubric", "Rubric")
-                        .WithMany("Criteria")
+                        .WithMany()
                         .HasForeignKey("RubricId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("GradrTab.Models.User", "UploadedBy")
+                        .WithMany()
+                        .HasForeignKey("UploadedByUserId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.Navigation("Document");
 
                     b.Navigation("Rubric");
-                });
 
-            modelBuilder.Entity("GradrTab.Models.RubricLevel", b =>
-                {
-                    b.HasOne("GradrTab.Models.RubricCriterion", "Criterion")
-                        .WithMany("Levels")
-                        .HasForeignKey("CriterionId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Criterion");
+                    b.Navigation("UploadedBy");
                 });
 
             modelBuilder.Entity("GradrTab.Models.Document", b =>
                 {
                     b.Navigation("Entries");
-                });
-
-            modelBuilder.Entity("GradrTab.Models.Rubric", b =>
-                {
-                    b.Navigation("Criteria");
-                });
-
-            modelBuilder.Entity("GradrTab.Models.RubricCriterion", b =>
-                {
-                    b.Navigation("Levels");
                 });
 #pragma warning restore 612, 618
         }

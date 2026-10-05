@@ -29,9 +29,15 @@ public class AuthControllerTests
 
         var result = await controller.Register(new RegisterRequestDto("Ada", "Lovelace", "Ada@example.com", "password123"));
 
-        var created = Assert.IsType<CreatedAtActionResult>(result.Result);
-        var user = Assert.IsType<UserResponseDto>(created.Value);
-        Assert.Equal("ada@example.com", user.Email);
+        // Register answers 200 with the new user and a token, it does not
+        // redirect the way a 201 Created would
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var auth = Assert.IsType<AuthResponseDto>(ok.Value);
+
+        Assert.Equal("ada@example.com", auth.User.Email);
+        Assert.Equal("Ada", auth.User.FirstName);
+        Assert.Equal("Lovelace", auth.User.LastName);
+        Assert.False(string.IsNullOrWhiteSpace(auth.Token));
         Assert.True(await uow.Users.ExistsWithEmailAsync("ada@example.com"));
     }
 

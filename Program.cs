@@ -26,7 +26,6 @@ if (!string.IsNullOrWhiteSpace(port))
 {
     builder.WebHost.UseUrls($"http://*:{port.Trim()}");
 }
-
 // Add services to the container.
 
 // Resolve the Postgres connection string.
@@ -154,11 +153,14 @@ builder.Services.Configure<PasswordResetOptions>(
 builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
 builder.Services.AddScoped<IPasswordResetService, PasswordResetService>();
 
-// Rubrics submitted by the frontend
-builder.Services.Configure<RubricOptions>(
-    builder.Configuration.GetSection(RubricOptions.SectionName));
-
+// Rubrics the frontend creates, edits and deletes
 builder.Services.AddScoped<IRubricService, RubricService>();
+
+// Submissions filed against a rubric
+builder.Services.AddScoped<ISubmissionService, SubmissionService>();
+
+// Grades the assessment of a submission against its rubric
+builder.Services.AddScoped<IGradingService, GradingService>();
 
 var app = builder.Build();
 

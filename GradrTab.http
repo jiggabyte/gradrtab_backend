@@ -1,8 +1,9 @@
 @GradrTab_HostAddress = http://localhost:5120
 @token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1laWRlbnRpZmllciI6IjE5OWM2ZDVlLTIwYzgtNDRiYi04MDViLTlhYTkxNDVmNGIxMiIsImh0dHA6Ly9zY2hlbWFzLnhtbHNvYXAub3JnL3dzLzIwMDUvMDUvaWRlbnRpdHkvY2xhaW1zL2VtYWlsYWRkcmVzcyI6ImppZ2dhLmUxMEBnbWFpbC5jb20iLCJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9naXZlbm5hbWUiOiJKaWdnYSIsImh0dHA6Ly9zY2hlbWFzLnhtbHNvYXAub3JnL3dzLzIwMDUvMDUvaWRlbnRpdHkvY2xhaW1zL3N1cm5hbWUiOiJCeXRlIiwiZXhwIjoxNzkwNTA0MjQ2LCJpc3MiOiJHcmFkclRhYiIsImF1ZCI6IkdyYWRyVGFiVXNlcnMifQ.IjVWaVmj7XsBrfoPmLDf4ro_BfMJ4BQnvprqFn0G3YU
 @documentId = 0384ee4c-56be-461a-89f7-fecc51546b42
-@resetToken = paste-the-token-from-the-emailed-link-here
+@resetToken = 4gJOOXHbrNkejPsksKs4-oRgfVmiix36XhZ65zJbsr4
 @rubricId = 00000000-0000-0000-0000-000000000000
+@submissionId = 00000000-0000-0000-0000-000000000000
 GET {{GradrTab_HostAddress}}/api/v1/health
 Accept: application/json
 
@@ -68,7 +69,7 @@ POST {{GradrTab_HostAddress}}/api/v1/login
 Content-Type: application/json
 
 {
-  "email": "uploader@yopmail.com",
+  "email": "jigga.e10@gmail.com",
   "password": "Str0ngerPassw0rd!"
 }
 
@@ -85,7 +86,7 @@ Content-Disposition: form-data; name="files"; filename="students.csv"
 Content-Type: text/csv
 
 < ./samples/students.csv
-------GradrTabBoundary--  
+------GradrTabBoundary--
 
 ###
 
@@ -133,31 +134,94 @@ Authorization: Bearer {{token}}
 
 # ---- Rubrics ----
 
-# Submit a rubric. The id/title/criteria shape is exactly what the frontend
-# sends. The server adds maxPoints, criterionCount and a database id.
-# Submitting the same "id" again replaces the stored rubric.
+# Create a rubric. The server adds the id, the owner and the timestamps.
 POST {{GradrTab_HostAddress}}/api/v1/rubrics
 Authorization: Bearer {{token}}
 Content-Type: application/json
 
-< ./samples/rubric_schema.json
+< ./samples/rubric_request.json
 
 ###
 
-# Every stored rubric of the signed in user
+# Every rubric of the signed in user, newest first
 GET {{GradrTab_HostAddress}}/api/v1/rubrics?page=1&pageSize=20
 Authorization: Bearer {{token}}
 
 ###
 
-# One rubric with its criteria and levels
-GET {{GradrTab_HostAddress}}/api/v1/rubrics/by-key/rub_essay
+# One rubric, including its content
+GET {{GradrTab_HostAddress}}/api/v1/rubrics/{{rubricId}}
 Authorization: Bearer {{token}}
+
+###
+
+# Replace the course and the content of a rubric
+PUT {{GradrTab_HostAddress}}/api/v1/rubrics/{{rubricId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+< ./samples/rubric_request.json
 
 ###
 
 # Delete a rubric
 DELETE {{GradrTab_HostAddress}}/api/v1/rubrics/{{rubricId}}
+Authorization: Bearer {{token}}
+
+###
+
+# ---- Submissions ----
+
+# File a submission against a rubric, it starts out as NotStarted
+POST {{GradrTab_HostAddress}}/api/v1/submissions
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+< ./samples/submission_request.json
+
+###
+
+# Every submission of the signed in user, newest first
+GET {{GradrTab_HostAddress}}/api/v1/submissions?page=1&pageSize=20
+Authorization: Bearer {{token}}
+
+###
+
+# Only the submissions filed against one rubric
+GET {{GradrTab_HostAddress}}/api/v1/submissions?rubricId={{rubricId}}&page=1&pageSize=20
+Authorization: Bearer {{token}}
+
+###
+
+# One submission, including its evaluation
+GET {{GradrTab_HostAddress}}/api/v1/submissions/{{submissionId}}
+Authorization: Bearer {{token}}
+
+###
+
+# Replace the student, the rubric, the document and the evaluation
+PUT {{GradrTab_HostAddress}}/api/v1/submissions/{{submissionId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+< ./samples/submission_request.json
+
+###
+
+# Grade a submission. The assessment of its uploaded document is graded
+# against the rubric it was filed with and the evaluation is stored on the
+# submission. The body is optional, it only carries overrides:
+# { "model": "openai/gpt-4o-mini", "instructions": "weigh the sources heavily" }
+POST {{GradrTab_HostAddress}}/api/v1/submissions/{{submissionId}}/grade
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{}
+
+###
+
+# Delete a submission
+DELETE {{GradrTab_HostAddress}}/api/v1/submissions/{{submissionId}}
 Authorization: Bearer {{token}}
 
 ###

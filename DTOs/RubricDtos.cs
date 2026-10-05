@@ -2,70 +2,38 @@ using System.ComponentModel.DataAnnotations;
 
 namespace GradrTab.DTOs;
 
-// Body of POST /api/v1/rubrics. The shape mirrors the payload the frontend
-// submits: { "id", "title", "criteria": [ { "id", "name", "levels": [...] } ] }
-public class RubricSubmissionDto
+// Body of POST /api/v1/rubrics and PUT /api/v1/rubrics/{id}. Creating and
+// updating a rubric take the same fields, so one payload covers both.
+public class RubricWriteDto
 {
-    [Required]
-    [StringLength(100, MinimumLength = 1)]
-    public string Id { get; set; } = string.Empty;
-
     [Required]
     [StringLength(200, MinimumLength = 1)]
-    public string Title { get; set; } = string.Empty;
+    public string CourseName { get; set; } = string.Empty;
 
-    [Required]
-    [MinLength(1)]
-    public List<RubricCriterionDto> Criteria { get; set; } = [];
-}
-
-public class RubricCriterionDto
-{
     [Required]
     [StringLength(100, MinimumLength = 1)]
-    public string Id { get; set; } = string.Empty;
+    public string CourseId { get; set; } = string.Empty;
 
+    // The rubric itself, kept exactly as it was submitted
     [Required]
-    [StringLength(200, MinimumLength = 1)]
-    public string Name { get; set; } = string.Empty;
-
-    [Required]
-    [MinLength(1)]
-    public List<RubricLevelDto> Levels { get; set; } = [];
+    [StringLength(100_000, MinimumLength = 1)]
+    public string RubricContent { get; set; } = string.Empty;
 }
 
-public class RubricLevelDto
-{
-    [Required]
-    [StringLength(100, MinimumLength = 1)]
-    public string Label { get; set; } = string.Empty;
-
-    [Range(1, int.MaxValue)]
-    public int Points { get; set; }
-
-    [StringLength(1000)]
-    public string? Description { get; set; }
-}
-
-// What the server stored, including the values it derived itself
+// What the server stored, including the values the server owns itself
 public record RubricResponseDto(
     Guid Id,
-    string RubricKey,
-    string Title,
-    int MaxPoints,
-    int CriterionCount,
-    IReadOnlyList<RubricCriterionResponseDto> Criteria,
+    string CourseName,
+    string CourseId,
+    string RubricContent,
     Guid? UploadedByUserId,
     DateTime CreatedAt,
     DateTime UpdatedAt);
 
-public record RubricCriterionResponseDto(
-    string CriterionKey,
-    string Name,
-    int MaxPoints,
-    IReadOnlyList<RubricLevelResponseDto> Levels);
-
-public record RubricLevelResponseDto(
-    string Label,
-    int Points,
-    string? Description);
+// Compact entry for the list endpoint, without the rubric content itself
+public record RubricSummaryDto(
+    Guid Id,
+    string CourseName,
+    string CourseId,
+    DateTime CreatedAt,
+    DateTime UpdatedAt);

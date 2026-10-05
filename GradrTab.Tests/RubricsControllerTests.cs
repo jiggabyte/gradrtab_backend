@@ -1,8 +1,6 @@
 using System.Security.Claims;
-using System.Text.Json;
 using GradrTab.Controllers;
 using GradrTab.DTOs;
-using GradrTab.Services;
 using GradrTab.Tests.Support;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -36,66 +34,84 @@ public class RubricsControllerTests
     }
 
     [Fact]
-    public async Task Submit_StoresTheRubricFromThePayload()
+    public async Task Create_ReturnsCreatedAtTheNewRubric()
     {
         var uow = new InMemoryUnitOfWork();
         var controller = CreateController(uow, Guid.NewGuid());
 
-        var result = await controller.Submit(TestHelpers.SampleRubric(), CancellationToken.None);
+        var result = await controller.Create(TestHelpers.SampleRubric(), CancellationToken.None);
 
         var created = Assert.IsType<CreatedAtActionResult>(result.Result);
         var rubric = Assert.IsType<RubricResponseDto>(created.Value);
 
-        Assert.Equal("rub_essay", rubric.RubricKey);
-        Assert.Equal("Research Essay", rubric.Title);
-        Assert.Equal(100, rubric.MaxPoints);
-        Assert.Equal(3, rubric.CriterionCount);
+        Assert.Equal("ECON-101", rubric.CourseId);
+        Assert.Equal("Economics", rubric.CourseName);
         Assert.Single(uow.RubricRows);
     }
 
     [Fact]
-    public async Task Submit_ReturnsEveryValidationProblem()
+    public async Task Create_PointsAtTheGetByIdRoute()
     {
         var uow = new InMemoryUnitOfWork();
         var controller = CreateController(uow, Guid.NewGuid());
 
-        var payload = TestHelpers.SampleRubric();
-        payload.Criteria[1].Id = "thesis";
+        var result = await controller.Create(TestHelpers.SampleRubric(), CancellationToken.None);
 
-        var result = await controller.Submit(payload, CancellationToken.None);
+        var created = Assert.IsType<CreatedAtActionResult>(result.Result);
+        Assert.Equal(nameof(RubricsController.GetById), created.ActionName);
+    }
 
-        var badRequest = Assert.IsType<BadRequestObjectResult>(result.Result);
+    [Fact]
+    public async Task Create_WithoutAUserIdAnswersUnauthorized()
+    {
+        var uow = new InMemoryUnitOfWork();
+        var controller = CreateController(uow);
 
-        // The anonymous envelope has to be serialized to see the messages inside
-        var body = JsonSerializer.Serialize(badRequest.Value);
+        var result = await controller.Create(TestHelpers.SampleRubric(), CancellationToken.None);
 
-        Assert.Contains("errors", body);
-        Assert.Contains("reuses the id", body);
+        Assert.IsType<UnauthorizedResult>(result.Result);
         Assert.Empty(uow.RubricRows);
     }
 
     [Fact]
-    public async Task GetByKey_ReturnsTheStoredRubric()
+    public async Task GetById_ReturnsTheStoredRubric()
     {
         var uow = new InMemoryUnitOfWork();
         var userId = Guid.NewGuid();
         var controller = CreateController(uow, userId);
 
-        await controller.Submit(TestHelpers.SampleRubric(), CancellationToken.None);
-        var result = await controller.GetByKey("rub_essay", CancellationToken.None);
+        var created = await controller.Create(TestHelpers.SampleRubric(), CancellationToken.None);
+        var rubric = Assert.IsType<RubricResponseDto>(
+            Assert.IsType<CreatedAtActionResult>(created.Result).Value);
+
+        var result = await controller.GetById(rubric.Id, CancellationToken.None);
 
         var ok = Assert.IsType<OkObjectResult>(result.Result);
-        var rubric = Assert.IsType<RubricResponseDto>(ok.Value);
-        Assert.Equal(3, rubric.Criteria.Count);
+        Assert.Equal(rubric.Id, Assert.IsType<RubricResponseDto>(ok.Value).Id);
     }
 
     [Fact]
-    public async Task GetByKey_ReturnsNotFoundForAMissingKey()
+    public async Task GetById_AnswersNotFoundForAMissingRubric()
     {
         var uow = new InMemoryUnitOfWork();
         var controller = CreateController(uow, Guid.NewGuid());
 
-        var result = await controller.GetByKey("nope", CancellationToken.None);
+        var result = await controller.GetById(Guid.NewGuid(), CancellationToken.None);
+
+        Assert.IsType<NotFoundObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task GetById_AnswersNotFoundForARubricOfSomebodyElse()
+    {
+        var uow = new InMemoryUnitOfWork();
+
+        var created = await CreateController(uow, Guid.NewGuid())
+            .Create(TestHelpers.SampleRubric(), CancellationToken.None);
+        var rubric = Assert.IsType<RubricResponseDto>(
+            Assert.IsType<CreatedAtActionResult>(created.Result).Value);
+
+        var result = await CreateController(uow, Guid.NewGuid()).GetById(rubric.Id, CancellationToken.None);
 
         Assert.IsType<NotFoundObjectResult>(result.Result);
     }
@@ -106,8 +122,8 @@ public class RubricsControllerTests
         var uow = new InMemoryUnitOfWork();
         var mine = Guid.NewGuid();
 
-        await CreateController(uow, mine).Submit(TestHelpers.SampleRubric(), CancellationToken.None);
-        await CreateController(uow, Guid.NewGuid()).Submit(TestHelpers.SampleRubric(), CancellationToken.None);
+        await CreateController(uow, mine).Create(TestHelpers.SampleRubric(), CancellationToken.None);
+        await CreateController(uow, Guid.NewGuid()).Create(TestHelpers.SampleRubric(), CancellationToken.None);
 
         var result = await CreateController(uow, mine).List(page: 1, pageSize: 20, CancellationToken.None);
 
@@ -119,19 +135,83 @@ public class RubricsControllerTests
     }
 
     [Fact]
+    public async Task List_PassesThePagingOn()
+    {
+        var uow = new InMemoryUnitOfWork();
+        var userId = Guid.NewGuid();
+
+        await CreateController(uow, userId).Create(TestHelpers.SampleRubric(), CancellationToken.None);
+        await CreateController(uow, userId).Create(TestHelpers.SampleRubric(), CancellationToken.None);
+
+        var result = await CreateController(uow, userId).List(page: 2, pageSize: 1, CancellationToken.None);
+
+        var page = Assert.IsType<PagedResultDto<RubricSummaryDto>>(
+            Assert.IsType<OkObjectResult>(result.Result).Value);
+
+        Assert.Equal(2, page.TotalCount);
+        Assert.Equal(2, page.TotalPages);
+        Assert.Single(page.Items);
+    }
+
+    [Fact]
+    public async Task Update_ReturnsTheUpdatedRubric()
+    {
+        var uow = new InMemoryUnitOfWork();
+        var userId = Guid.NewGuid();
+
+        var created = await CreateController(uow, userId).Create(TestHelpers.SampleRubric(), CancellationToken.None);
+        var rubric = Assert.IsType<RubricResponseDto>(
+            Assert.IsType<CreatedAtActionResult>(created.Result).Value);
+
+        var edit = TestHelpers.SampleRubric();
+        edit.CourseName = "Economics II";
+
+        var result = await CreateController(uow, userId).Update(rubric.Id, edit, CancellationToken.None);
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        Assert.Equal("Economics II", Assert.IsType<RubricResponseDto>(ok.Value).CourseName);
+    }
+
+    [Fact]
+    public async Task Update_AnswersNotFoundForAMissingRubric()
+    {
+        var uow = new InMemoryUnitOfWork();
+        var controller = CreateController(uow, Guid.NewGuid());
+
+        var result = await controller.Update(Guid.NewGuid(), TestHelpers.SampleRubric(), CancellationToken.None);
+
+        Assert.IsType<NotFoundObjectResult>(result.Result);
+    }
+
+    [Fact]
     public async Task Delete_ReturnsNoContent()
     {
         var uow = new InMemoryUnitOfWork();
         var userId = Guid.NewGuid();
-        var controller = CreateController(uow, userId);
 
-        var submitted = await controller.Submit(TestHelpers.SampleRubric(), CancellationToken.None);
+        var created = await CreateController(uow, userId).Create(TestHelpers.SampleRubric(), CancellationToken.None);
         var rubric = Assert.IsType<RubricResponseDto>(
-            Assert.IsType<CreatedAtActionResult>(submitted.Result).Value);
+            Assert.IsType<CreatedAtActionResult>(created.Result).Value);
 
-        var result = await controller.Delete(rubric.Id, CancellationToken.None);
+        var result = await CreateController(uow, userId).Delete(rubric.Id, CancellationToken.None);
 
         Assert.IsType<NoContentResult>(result);
         Assert.Empty(uow.RubricRows);
+    }
+
+    [Fact]
+    public async Task Delete_AnswersNotFoundForARubricOfSomebodyElse()
+    {
+        var uow = new InMemoryUnitOfWork();
+
+        var created = await CreateController(uow, Guid.NewGuid())
+            .Create(TestHelpers.SampleRubric(), CancellationToken.None);
+        var rubric = Assert.IsType<RubricResponseDto>(
+            Assert.IsType<CreatedAtActionResult>(created.Result).Value);
+
+        var result = await CreateController(uow, Guid.NewGuid()).Delete(rubric.Id, CancellationToken.None);
+
+        Assert.IsType<NotFoundObjectResult>(result);
+        Assert.Single(uow.RubricRows);
     }
 }

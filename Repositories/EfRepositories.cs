@@ -46,6 +46,24 @@ public sealed class DocumentEntryRepository(AppDbContext context) : Repository<D
         Set.Where(e => e.DocumentId == documentId).ExecuteDeleteAsync(cancellationToken);
 }
 
+public sealed class SubmissionRepository(AppDbContext context) : Repository<Submission>(context), ISubmissionRepository
+{
+    public IQueryable<Submission> OwnedBy(Guid userId, bool asNoTracking = true)
+    {
+        var query = Set.Where(s => s.UploadedByUserId == userId);
+        return asNoTracking ? query.AsNoTracking() : query;
+    }
+
+    public Task<Submission?> GetOwnedAsync(Guid id, Guid userId, bool asNoTracking = true, CancellationToken cancellationToken = default)
+    {
+        var query = OwnedBy(userId, asNoTracking);
+        return query.FirstOrDefaultAsync(s => s.Id == id, cancellationToken);
+    }
+
+    public Task<Submission?> GetOwnedTrackedAsync(Guid id, Guid userId, CancellationToken cancellationToken = default) =>
+        Set.FirstOrDefaultAsync(s => s.Id == id && s.UploadedByUserId == userId, cancellationToken);
+}
+
 public sealed class PasswordResetTokenRepository(AppDbContext context)
     : Repository<PasswordResetToken>(context), IPasswordResetTokenRepository
 {
@@ -82,31 +100,19 @@ public sealed class PasswordResetTokenRepository(AppDbContext context)
 
 public sealed class RubricRepository(AppDbContext context) : Repository<Rubric>(context), IRubricRepository
 {
-    // OrderBy is applied so the criteria come back in the submitted order.
-    // Include already returns a fresh queryable, so it is never tracked twice.
-    private IQueryable<Rubric> WithChildren() =>
-        Set
-            .Include(r => r.Criteria.OrderBy(c => c.Order))
-            .ThenInclude(c => c.Levels.OrderBy(l => l.Order))
-            .AsNoTracking();
+    public IQueryable<Rubric> OwnedBy(Guid userId, bool asNoTracking = true)
+    {
+        var query = Set.Where(r => r.UploadedByUserId == userId);
+        return asNoTracking ? query.AsNoTracking() : query;
+    }
 
-    public Task<Rubric?> GetWithChildrenAsync(Guid id, CancellationToken cancellationToken = default) =>
-        WithChildren().FirstOrDefaultAsync(r => r.Id == id, cancellationToken);
+    public Task<Rubric?> GetOwnedAsync(Guid id, Guid userId, bool asNoTracking = true, CancellationToken cancellationToken = default)
+    {
+        var query = OwnedBy(userId, asNoTracking);
+        return query.FirstOrDefaultAsync(r => r.Id == id, cancellationToken);
+    }
 
-    public Task<Rubric?> GetByKeyAsync(string rubricKey, Guid? userId = null, CancellationToken cancellationToken = default) =>
-        Set.FirstOrDefaultAsync(
-            r => r.RubricKey == rubricKey && (userId == null || r.UploadedByUserId == userId),
-            cancellationToken);
-
-    public Task<Rubric?> GetWithChildrenByKeyAsync(
-        string rubricKey,
-        Guid? userId = null,
-        CancellationToken cancellationToken = default) =>
-        WithChildren().FirstOrDefaultAsync(
-            r => r.RubricKey == rubricKey && (userId == null || r.UploadedByUserId == userId),
-            cancellationToken);
-
-    public Task<Rubric?> GetTrackedAsync(Guid id, CancellationToken cancellationToken = default) =>
-        Set.FirstOrDefaultAsync(r => r.Id == id, cancellationToken);
+    public Task<Rubric?> GetOwnedTrackedAsync(Guid id, Guid userId, CancellationToken cancellationToken = default) =>
+        Set.FirstOrDefaultAsync(r => r.Id == id && r.UploadedByUserId == userId, cancellationToken);
 }
 
