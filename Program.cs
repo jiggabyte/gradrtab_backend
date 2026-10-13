@@ -74,6 +74,61 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
     options.KnownProxies.Clear();
 });
 
+// CORS: lets browser clients (Vercel frontend, local dev servers, hosted
+// Swagger UI, ...) reach the API. AllowAnyOrigin defaults to true so every
+// client works out of the box; set Cors__AllowAnyOrigin=false and list exact
+// origins in Cors__AllowedOrigins (or the "Cors" appsettings section) to lock
+// it down. The Vercel frontend is always allowed explicitly.
+const string corsPolicyName = "GradrTabCors";
+builder.Services.Configure<CorsOptions>(
+    builder.Configuration.GetSection(CorsOptions.SectionName));
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy(corsPolicyName, policy =>
+    {
+        var corsOptions = builder.Configuration
+            .GetSection(CorsOptions.SectionName)
+            .Get<CorsOptions>() ?? new CorsOptions();
+
+        var origins = corsOptions.AllowedOrigins
+            .Where(origin => !string.IsNullOrWhiteSpace(origin))
+            .Select(origin => origin.Trim().TrimEnd('/'))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        // Render/dashboard override as a single string, e.g.
+        // Cors__AllowedOrigins=https://a.example,https://b.example
+        var extraOrigins = Environment.GetEnvironmentVariable("Cors__AllowedOrigins");
+        if (!string.IsNullOrWhiteSpace(extraOrigins))
+        {
+            foreach (var origin in extraOrigins.Split([',', ';', ' '], StringSplitOptions.RemoveEmptyEntries))
+            {
+                var cleaned = origin.Trim().TrimEnd('/');
+                if (!string.IsNullOrWhiteSpace(cleaned) &&
+                    !origins.Contains(cleaned, StringComparer.OrdinalIgnoreCase))
+                {
+                    origins.Add(cleaned);
+                }
+            }
+        }
+
+        const string vercelFrontend = "https://gradr-tab-frontend.vercel.app";
+        if (!origins.Contains(vercelFrontend, StringComparer.OrdinalIgnoreCase))
+        {
+            origins.Add(vercelFrontend);
+        }
+
+        if (corsOptions.AllowAnyOrigin)
+        {
+            policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod();
+        }
+        else
+        {
+            policy.WithOrigins(origins.ToArray()).AllowAnyHeader().AllowAnyMethod();
+        }
+    });
+});
+
 // Add JWT Authentication (secret can come from appsettings, .env, or JwtSettings__Secret env var)
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
 var jwtSecret = jwtSettings["Secret"] ?? Environment.GetEnvironmentVariable("JWT_SECRET");
@@ -176,6 +231,10 @@ builder.Services.AddScoped<IAiDetectionService, AiDetectionService>();
 var app = builder.Build();
 
 app.UseForwardedHeaders();
+
+// CORS preflights (OPTIONS) carry no credentials, so this must run before
+// authentication/authorization, otherwise browsers block the real request.
+app.UseCors(corsPolicyName);
 
 // Apply EF Core migrations at startup so Render/Docker deploys don't need a separate migrate step.
 using (var scope = app.Services.CreateScope())

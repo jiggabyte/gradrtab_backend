@@ -137,6 +137,8 @@ public class SubmissionsController : ControllerBase
             userId.Value,
             cancellationToken);
 
+            Console.WriteLine($"Grading submission {id} for user {userId.Value}: Succeeded={result.Succeeded}, StatusCode={result.StatusCode}, Data={result}, ErrorMessage={result.ErrorMessage}");
+
         if (result.Succeeded && result.Evaluation is not null)
         {
             return Ok(result.Evaluation);
