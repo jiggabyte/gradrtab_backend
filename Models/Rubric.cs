@@ -11,19 +11,12 @@ public class Rubric
     [Key]
     public Guid Id { get; set; } = Guid.NewGuid();
 
-    // The "id" from the submitted payload, for example rub_essay
-    [Required]
-    [MaxLength(100)]
-    public string RubricKey { get; set; } = string.Empty;
 
-    [Required]
-    [MaxLength(200)]
-    public string Title { get; set; } = string.Empty;
+    public string CourseName{ get; set; } = string.Empty;
 
-    // Sum of the highest level of every criterion, computed on save
-    public int MaxPoints { get; set; }
+    public string CourseId { get; set; } = string.Empty;
 
-    public int CriterionCount { get; set; }
+    public string RubricContent { get; set; } = string.Empty;
 
     // The authenticated user that submitted the rubric
     public Guid? UploadedByUserId { get; set; }
@@ -35,5 +28,4 @@ public class Rubric
 
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
-    public ICollection<RubricCriterion> Criteria { get; set; } = new List<RubricCriterion>();
 }

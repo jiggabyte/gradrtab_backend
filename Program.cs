@@ -26,7 +26,6 @@ if (!string.IsNullOrWhiteSpace(port))
 {
     builder.WebHost.UseUrls($"http://*:{port.Trim()}");
 }
-
 // Add services to the container.
 
 // Resolve the Postgres connection string.
@@ -129,6 +128,11 @@ builder.Services.AddScoped<IDocumentProcessingService, DocumentProcessingService
 builder.Services.Configure<AiOptions>(
     builder.Configuration.GetSection(AiOptions.SectionName));
 
+// OPENROUTER_API_KEY (env / .env / Render dashboard) must win over the
+// Ai:ApiKey placeholder shipped in appsettings.json, and template values
+// like "<add api key>" must never be sent as a Bearer credential.
+builder.Services.PostConfigure<AiOptions>(AiOptionsResolver.Apply);
+
 builder.Services.AddHttpClient(OpenRouterAiService.HttpClientName)
     .ConfigureHttpClient((provider, client) =>
     {
@@ -154,11 +158,20 @@ builder.Services.Configure<PasswordResetOptions>(
 builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
 builder.Services.AddScoped<IPasswordResetService, PasswordResetService>();
 
-// Rubrics submitted by the frontend
-builder.Services.Configure<RubricOptions>(
-    builder.Configuration.GetSection(RubricOptions.SectionName));
-
+// Rubrics the frontend creates, edits and deletes
 builder.Services.AddScoped<IRubricService, RubricService>();
+
+// Submissions filed against a rubric
+builder.Services.AddScoped<ISubmissionService, SubmissionService>();
+
+// Grades the assessment of a submission against its rubric
+builder.Services.AddScoped<IGradingService, GradingService>();
+
+// Mails the stored grading result (submission + rubric + evaluation) to a grader
+builder.Services.AddScoped<IGradingEmailService, GradingEmailService>();
+
+// Estimates how much of an assessment reads as AI-generated
+builder.Services.AddScoped<IAiDetectionService, AiDetectionService>();
 
 var app = builder.Build();
 

@@ -13,6 +13,7 @@ public sealed class UnitOfWork : IUnitOfWork
         Documents = new DocumentRepository(context);
         DocumentEntries = new DocumentEntryRepository(context);
         PasswordResetTokens = new PasswordResetTokenRepository(context);
+        Submissions = new SubmissionRepository(context);
         Rubrics = new RubricRepository(context);
     }
 
@@ -23,6 +24,8 @@ public sealed class UnitOfWork : IUnitOfWork
     public IDocumentEntryRepository DocumentEntries { get; }
 
     public IPasswordResetTokenRepository PasswordResetTokens { get; }
+
+    public ISubmissionRepository Submissions { get; }
 
     public IRubricRepository Rubrics { get; }
 

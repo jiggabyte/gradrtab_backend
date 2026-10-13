@@ -43,16 +43,23 @@ public interface IPasswordResetTokenRepository : IRepository<PasswordResetToken>
 
 public interface IRubricRepository : IRepository<Rubric>
 {
-    // The criteria and levels come with the rubric, otherwise the response would
-    // come back empty
-    Task<Rubric?> GetWithChildrenAsync(Guid id, CancellationToken cancellationToken = default);
+    // Only rubrics owned by the given user are visible.
+    IQueryable<Rubric> OwnedBy(Guid userId, bool asNoTracking = true);
 
-    // The client supplied key, optionally narrowed down to one owner
-    Task<Rubric?> GetByKeyAsync(string rubricKey, Guid? userId = null, CancellationToken cancellationToken = default);
+    Task<Rubric?> GetOwnedAsync(Guid id, Guid userId, bool asNoTracking = true, CancellationToken cancellationToken = default);
 
-    Task<Rubric?> GetWithChildrenByKeyAsync(string rubricKey, Guid? userId = null, CancellationToken cancellationToken = default);
+    // Tracked entity, needed where an update or a delete has to run.
+    Task<Rubric?> GetOwnedTrackedAsync(Guid id, Guid userId, CancellationToken cancellationToken = default);
+}
 
-    // Tracked entity, needed where a delete has to run
-    Task<Rubric?> GetTrackedAsync(Guid id, CancellationToken cancellationToken = default);
+public interface ISubmissionRepository : IRepository<Submission>
+{
+    // Only submissions owned by the given user are visible.
+    IQueryable<Submission> OwnedBy(Guid userId, bool asNoTracking = true);
+
+    Task<Submission?> GetOwnedAsync(Guid id, Guid userId, bool asNoTracking = true, CancellationToken cancellationToken = default);
+
+    // Tracked entity, needed where an update or a delete has to run.
+    Task<Submission?> GetOwnedTrackedAsync(Guid id, Guid userId, CancellationToken cancellationToken = default);
 }
 

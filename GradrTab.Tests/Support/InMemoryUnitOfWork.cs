@@ -18,6 +18,7 @@ public sealed class InMemoryUnitOfWork : IUnitOfWork
         DocumentEntries = new ListDocumentEntryRepository(_entries);
         PasswordResetTokens = new ListPasswordResetTokenRepository(ResetTokens);
         Rubrics = new ListRubricRepository(RubricRows);
+        Submissions = new ListSubmissionRepository(SubmissionRows);
     }
 
     public IUserRepository Users { get; }
@@ -30,11 +31,16 @@ public sealed class InMemoryUnitOfWork : IUnitOfWork
 
     public IRubricRepository Rubrics { get; }
 
+    public ISubmissionRepository Submissions { get; }
+
     // The stored reset links, exposed so tests can assert on them
     public List<PasswordResetToken> ResetTokens { get; } = [];
 
     // The stored rubrics, exposed so tests can assert on them
     public List<Rubric> RubricRows { get; } = [];
+
+    // The stored submissions, exposed so tests can assert on them
+    public List<Submission> SubmissionRows { get; } = [];
 
     public int SaveCalls { get; private set; }
 
@@ -200,20 +206,47 @@ public sealed class InMemoryUnitOfWork : IUnitOfWork
 
         public void Remove(Rubric entity) => store.RemoveAll(r => r.Id == entity.Id);
 
-        public Task<Rubric?> GetWithChildrenAsync(Guid id, CancellationToken cancellationToken = default) =>
-            Task.FromResult(store.FirstOrDefault(r => r.Id == id));
+        public IQueryable<Rubric> OwnedBy(Guid userId, bool asNoTracking = true) =>
+            store.Where(r => r.UploadedByUserId == userId).AsQueryable();
 
-        public Task<Rubric?> GetByKeyAsync(string rubricKey, Guid? userId = null, CancellationToken cancellationToken = default) =>
-            Task.FromResult(store.FirstOrDefault(r =>
-                r.RubricKey == rubricKey && (userId == null || r.UploadedByUserId == userId)));
+        public Task<Rubric?> GetOwnedAsync(Guid id, Guid userId, bool asNoTracking = true, CancellationToken cancellationToken = default) =>
+            Task.FromResult(store.FirstOrDefault(r => r.Id == id && r.UploadedByUserId == userId));
 
-        public Task<Rubric?> GetWithChildrenByKeyAsync(
-            string rubricKey,
-            Guid? userId = null,
-            CancellationToken cancellationToken = default) =>
-            GetByKeyAsync(rubricKey, userId, cancellationToken);
+        public Task<Rubric?> GetOwnedTrackedAsync(Guid id, Guid userId, CancellationToken cancellationToken = default) =>
+            GetOwnedAsync(id, userId, cancellationToken: cancellationToken);
+    }
 
-        public Task<Rubric?> GetTrackedAsync(Guid id, CancellationToken cancellationToken = default) =>
-            GetByIdAsync(id, cancellationToken);
+    private sealed class ListSubmissionRepository(List<Submission> store) : ISubmissionRepository
+    {
+        public IQueryable<Submission> Query(bool asNoTracking = false) => store.AsQueryable();
+
+        public Task<Submission?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
+            Task.FromResult(store.FirstOrDefault(s => s.Id == id));
+
+        public Task AddAsync(Submission entity, CancellationToken cancellationToken = default)
+        {
+            store.Add(entity);
+            return Task.CompletedTask;
+        }
+
+        public void Update(Submission entity)
+        {
+            var index = store.FindIndex(s => s.Id == entity.Id);
+            if (index >= 0)
+            {
+                store[index] = entity;
+            }
+        }
+
+        public void Remove(Submission entity) => store.RemoveAll(s => s.Id == entity.Id);
+
+        public IQueryable<Submission> OwnedBy(Guid userId, bool asNoTracking = true) =>
+            store.Where(s => s.UploadedByUserId == userId).AsQueryable();
+
+        public Task<Submission?> GetOwnedAsync(Guid id, Guid userId, bool asNoTracking = true, CancellationToken cancellationToken = default) =>
+            Task.FromResult(store.FirstOrDefault(s => s.Id == id && s.UploadedByUserId == userId));
+
+        public Task<Submission?> GetOwnedTrackedAsync(Guid id, Guid userId, CancellationToken cancellationToken = default) =>
+            GetOwnedAsync(id, userId, cancellationToken: cancellationToken);
     }
 }

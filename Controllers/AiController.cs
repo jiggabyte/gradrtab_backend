@@ -16,15 +16,18 @@ namespace GradrTab.Controllers;
 public class AiController : ControllerBase
 {
     private readonly IAiService _aiService;
+    private readonly IAiDetectionService _detectionService;
     private readonly AiOptions _options;
     private readonly ILogger<AiController> _logger;
 
     public AiController(
         IAiService aiService,
+        IAiDetectionService detectionService,
         IOptions<AiOptions> options,
         ILogger<AiController> logger)
     {
         _aiService = aiService;
+        _detectionService = detectionService;
         _options = options.Value;
         _logger = logger;
     }
@@ -73,6 +76,47 @@ public class AiController : ControllerBase
             result.StatusCode,
             result.ProviderDetail,
             result.RetryAfterSeconds));
+    }
+
+    // POST /api/v1/ai/detect
+    // Analyses raw assessment text sent in the body and answers with the
+    // estimated AI share: { "text": "...", "model": "..." }.
+    // The body text needs at least 200 characters of real content.
+    [HttpPost("detect")]
+    public async Task<ActionResult<AiDetectionResponseDto>> Detect(
+        [FromBody] AiDetectTextRequestDto? request,
+        CancellationToken cancellationToken)
+    {
+        var userIdRaw = GetCurrentUserId();
+        if (!Guid.TryParse(userIdRaw, out var userId))
+        {
+            return Unauthorized();
+        }
+
+        if (request is null || string.IsNullOrWhiteSpace(request.Text))
+        {
+            return BadRequest(new
+            {
+                message = "Send the assessment text to analyse, for example { \"text\": \"...\" }."
+            });
+        }
+
+        var result = await _detectionService.DetectForTextAsync(
+            request.Text,
+            request,
+            userId,
+            cancellationToken);
+
+        if (result.Succeeded && result.Detection is not null)
+        {
+            return Ok(result.Detection);
+        }
+
+        _logger.LogWarning("AI text detection was refused with {Status}: {Error}", result.StatusCode, result.ErrorMessage);
+
+        return StatusCode(
+            result.StatusCode ?? StatusCodes.Status422UnprocessableEntity,
+            new { message = result.ErrorMessage });
     }
 
     // GET /api/v1/ai/status

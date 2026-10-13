@@ -283,4 +283,57 @@ public class AiServiceTests
             Environment.SetEnvironmentVariable("OPENROUTER_API_KEY", previous);
         }
     }
+
+    [Theory]
+    [InlineData("<add api key>")]
+    [InlineData("<api-key-here>")]
+    public async Task CompleteAsync_TreatsPlaceholderKeysAsMissing(string placeholder)
+    {
+        var previous = Environment.GetEnvironmentVariable("OPENROUTER_API_KEY");
+
+        try
+        {
+            Environment.SetEnvironmentVariable("OPENROUTER_API_KEY", null);
+
+            var handler = new StubHttpMessageHandler(HttpStatusCode.OK, SuccessBody);
+            var service = TestHelpers.CreateAiService(handler, TestHelpers.DefaultAiOptions(apiKey: placeholder));
+
+            Assert.False(service.IsConfigured);
+
+            var result = await service.CompleteAsync([new AiChatMessageDto("user", "hello")]);
+
+            Assert.False(result.Succeeded);
+            Assert.Equal(503, result.StatusCode);
+            Assert.Null(handler.LastRequest);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("OPENROUTER_API_KEY", previous);
+        }
+    }
+
+    [Fact]
+    public async Task CompleteAsync_PrefersTheEnvironmentKeyOverAConfiguredPlaceholder()
+    {
+        var previous = Environment.GetEnvironmentVariable("OPENROUTER_API_KEY");
+
+        try
+        {
+            Environment.SetEnvironmentVariable("OPENROUTER_API_KEY", "env-key");
+
+            var handler = new StubHttpMessageHandler(HttpStatusCode.OK, SuccessBody);
+            var service = TestHelpers.CreateAiService(handler, TestHelpers.DefaultAiOptions(apiKey: "<add api key>"));
+
+            Assert.True(service.IsConfigured);
+
+            var result = await service.CompleteAsync([new AiChatMessageDto("user", "hello")]);
+
+            Assert.True(result.Succeeded);
+            Assert.Equal("Bearer env-key", handler.LastAuthorization);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("OPENROUTER_API_KEY", previous);
+        }
+    }
 }

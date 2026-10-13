@@ -19,9 +19,7 @@ public class AppDbContext : DbContext
 
     public DbSet<Rubric> Rubrics { get; set; }
 
-    public DbSet<RubricCriterion> RubricCriteria { get; set; }
-
-    public DbSet<RubricLevel> RubricLevels { get; set; }
+    public DbSet<Submission> Submissions { get; set; }
 
     // Optional: Configure table details using Fluent API
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -74,41 +72,68 @@ public class AppDbContext : DbContext
             .HasForeignKey(t => t.UserId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        // The client supplied rubric key is unique per user, so two users may
-        // both own a rubric called rub_essay
+        // The rubric columns are sized here, the model itself carries no
+        // annotations of its own
         modelBuilder.Entity<Rubric>()
-            .HasIndex(r => new { r.UploadedByUserId, r.RubricKey })
-            .IsUnique();
+            .Property(r => r.CourseName)
+            .HasMaxLength(200);
 
-        // Removing a rubric takes its criteria and their levels with it
-        modelBuilder.Entity<RubricCriterion>()
-            .HasOne(c => c.Rubric)
-            .WithMany(r => r.Criteria)
-            .HasForeignKey(c => c.RubricId)
-            .OnDelete(DeleteBehavior.Cascade);
+        modelBuilder.Entity<Rubric>()
+            .Property(r => r.CourseId)
+            .HasMaxLength(100);
 
-        modelBuilder.Entity<RubricLevel>()
-            .HasOne(l => l.Criterion)
-            .WithMany(c => c.Levels)
-            .HasForeignKey(l => l.CriterionId)
-            .OnDelete(DeleteBehavior.Cascade);
+        // The rubric itself can be long, so it is not bound by a varchar limit
+        modelBuilder.Entity<Rubric>()
+            .Property(r => r.RubricContent)
+            .HasColumnType("text");
 
         modelBuilder.Entity<Rubric>()
             .HasIndex(r => r.CreatedAt);
 
-        modelBuilder.Entity<RubricCriterion>()
-            .HasIndex(c => new { c.RubricId, c.Order });
-
-        modelBuilder.Entity<RubricLevel>()
-            .HasIndex(l => new { l.CriterionId, l.Order });
-
-        // Deleting a user takes their rubrics, and through the cascade above
-        // the criteria and levels, with it
+        // Deleting a user takes their rubrics with it
         modelBuilder.Entity<Rubric>()
             .HasOne(r => r.UploadedBy)
             .WithMany()
             .HasForeignKey(r => r.UploadedByUserId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        // Store the grading state as a readable string instead of an integer
+        modelBuilder.Entity<Submission>()
+            .Property(s => s.GradingStatus)
+            .HasConversion<string>()
+            .HasMaxLength(20);
+
+        // A submission outlives the rubric or the document it points at, the
+        // reference is simply cleared when either one goes away
+        modelBuilder.Entity<Submission>()
+            .HasOne(s => s.Rubric)
+            .WithMany()
+            .HasForeignKey(s => s.RubricId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        modelBuilder.Entity<Submission>()
+            .HasOne(s => s.Document)
+            .WithMany()
+            .HasForeignKey(s => s.DocumentId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        // Deleting a user takes their submissions with it
+        modelBuilder.Entity<Submission>()
+            .HasOne(s => s.UploadedBy)
+            .WithMany()
+            .HasForeignKey(s => s.UploadedByUserId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<Submission>()
+            .HasIndex(s => s.CreatedAt);
+
+        // Listing the submissions of one rubric is the usual way in
+        modelBuilder.Entity<Submission>()
+            .HasIndex(s => new { s.RubricId, s.CreatedAt });
+
+        // Supports looking up everything one student handed in
+        modelBuilder.Entity<Submission>()
+            .HasIndex(s => new { s.StudentId, s.CreatedAt });
     }
 
 }

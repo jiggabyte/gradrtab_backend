@@ -13,11 +13,16 @@ namespace GradrTab.Tests;
 
 public class DocumentsControllerTests
 {
-    private static DocumentsController CreateController(InMemoryUnitOfWork uow, Guid userId, IDocumentProcessingService? processing = null)
+    private static DocumentsController CreateController(
+        InMemoryUnitOfWork uow,
+        Guid userId,
+        IDocumentProcessingService? processing = null,
+        IAiDetectionService? detection = null)
     {
         var controller = new DocumentsController(
             uow,
             processing ?? TestHelpers.CreateProcessingService(uow, FakeFileStorageService.Create(), new FakeExtractorResolver(TestHelpers.TextExtractor())),
+            detection ?? TestHelpers.CreateAiDetectionService(uow),
             FakeFileStorageService.Create(),
             TestHelpers.OptionsWrapper(),
             NullLogger<DocumentsController>.Instance);

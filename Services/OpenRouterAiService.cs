@@ -10,8 +10,8 @@ using Microsoft.Extensions.Options;
 namespace GradrTab.Services;
 
 // Posts a chat completion request to an OpenRouter compatible endpoint.
-// The API key is read from Ai:ApiKey and falls back to the OPENROUTER_API_KEY
-// environment variable, so the secret never has to live in appsettings.
+// The API key resolves as OPENROUTER_API_KEY (environment / .env / Render)
+// > Ai:ApiKey, and "<...>" template values are never sent as credentials.
 public sealed class OpenRouterAiService : IAiService
 {
     // Name of the typed client registered in Program.cs
@@ -45,7 +45,7 @@ public sealed class OpenRouterAiService : IAiService
 
     public string? UnavailableReason => IsConfigured
         ? null
-        : "No AI provider key is configured. Set the OPENROUTER_API_KEY environment variable (or Ai:ApiKey) and restart the application.";
+        : "No AI provider key is configured. Set the OPENROUTER_API_KEY environment variable (or Ai__ApiKey) to a real key, not a \"<...>\" placeholder, and restart the application.";
 
     public async Task<AiChatResult> CompleteAsync(
         IReadOnlyList<AiChatMessageDto> messages,
@@ -315,7 +315,7 @@ public sealed class OpenRouterAiService : IAiService
     private static string DescribeStatus(HttpStatusCode statusCode) => statusCode switch
     {
         HttpStatusCode.BadRequest => "The AI provider rejected the request as invalid.",
-        HttpStatusCode.Unauthorized => "The AI provider rejected the configured API key.",
+        HttpStatusCode.Unauthorized => "The AI provider rejected the request (401). The OPENROUTER_API_KEY is missing, is a \"<...>\" placeholder, expired, or has no credit for this model.",
         HttpStatusCode.PaymentRequired => "The AI provider refused the request, the account has no credit left.",
         HttpStatusCode.TooManyRequests => "The AI provider is rate limiting this account, try again later.",
         HttpStatusCode.NotFound => "The AI provider does not know the configured model or endpoint.",
@@ -344,15 +344,35 @@ public sealed class OpenRouterAiService : IAiService
 
     private string? ResolveApiKey()
     {
+        // AiOptionsResolver already applied the OPENROUTER_API_KEY >
+        // Ai:ApiKey priority and scrubbed "<...>" placeholders, so the
+        // configured value is authoritative. The direct environment read
+        // stays as a belt-and-suspenders fallback for hand-constructed
+        // options (unit tests) that skip PostConfigure.
         var fromConfiguration = _options.ApiKey;
-        if (!string.IsNullOrWhiteSpace(fromConfiguration))
+        if (!string.IsNullOrWhiteSpace(fromConfiguration) && !IsPlaceholder(fromConfiguration))
         {
             return fromConfiguration.Trim();
         }
 
         var fromEnvironment = Environment.GetEnvironmentVariable("OPENROUTER_API_KEY");
 
-        return string.IsNullOrWhiteSpace(fromEnvironment) ? null : fromEnvironment.Trim();
+        if (string.IsNullOrWhiteSpace(fromEnvironment) || IsPlaceholder(fromEnvironment))
+        {
+            return null;
+        }
+
+        return fromEnvironment.Trim();
+    }
+
+    // appsettings ships secrets as <...> template values. Anything in angle
+    // brackets is a template value, never a credential. Sending one as a
+    // Bearer token makes .NET drop/quote the header and OpenRouter answers
+    // 401 "Missing Authentication header".
+    private static bool IsPlaceholder(string value)
+    {
+        var trimmed = value.Trim();
+        return trimmed.StartsWith('<') && trimmed.EndsWith('>');
     }
 
     // ---- wire format -------------------------------------------------------

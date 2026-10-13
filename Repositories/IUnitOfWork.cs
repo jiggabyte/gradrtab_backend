@@ -12,6 +12,8 @@ public interface IUnitOfWork : IDisposable
 
     IPasswordResetTokenRepository PasswordResetTokens { get; }
 
+    ISubmissionRepository Submissions { get; }
+
     IRubricRepository Rubrics { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);

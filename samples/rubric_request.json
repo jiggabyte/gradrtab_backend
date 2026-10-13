@@ -1,0 +1,5 @@
+{
+  "courseName": "Economics",
+  "courseId": "ECON-101",
+  "rubricContent": "{\n  \"criteria\": [\n    { \"id\": \"thesis\", \"name\": \"Thesis & Argument\", \"points\": 40 },\n    { \"id\": \"evidence\", \"name\": \"Evidence\", \"points\": 40 },\n    { \"id\": \"mechanics\", \"name\": \"Grammar & Citations\", \"points\": 20 }\n  ]\n}"
+}

@@ -7,212 +7,75 @@ namespace GradrTab.Tests;
 public class RubricServiceTests
 {
     [Fact]
-    public async Task Submit_StoresTheCriteriaAndLevelsInOrder()
-    {
-        var uow = new InMemoryUnitOfWork();
-        var service = TestHelpers.CreateRubricService(uow);
-
-        var result = await service.SubmitAsync(TestHelpers.SampleRubric(), Guid.NewGuid());
-
-        Assert.True(result.Succeeded);
-        Assert.Empty(result.Errors);
-
-        var stored = Assert.Single(uow.RubricRows);
-        Assert.Equal("rub_essay", stored.RubricKey);
-        Assert.Equal("Research Essay", stored.Title);
-        Assert.Equal(3, stored.CriterionCount);
-
-        // The stored rows keep the order the frontend sent
-        var ordered = stored.Criteria.OrderBy(c => c.Order).ToList();
-
-        Assert.Equal(["thesis", "evidence", "mechanics"], ordered.Select(c => c.CriterionKey));
-        Assert.Equal(["Strong", "Adequate", "Weak"], ordered[0].Levels.OrderBy(l => l.Order).Select(l => l.Label));
-    }
-
-    [Fact]
-    public async Task Submit_DerivesTheMaxPointsFromTheTopLevel()
-    {
-        var uow = new InMemoryUnitOfWork();
-        var service = TestHelpers.CreateRubricService(uow);
-
-        var result = await service.SubmitAsync(TestHelpers.SampleRubric(), null);
-
-        // 40 thesis + 40 evidence + 20 mechanics
-        Assert.Equal(100, result.Rubric!.MaxPoints);
-        Assert.Equal(40, result.Rubric.Criteria[0].MaxPoints);
-        Assert.Equal(20, result.Rubric.Criteria[2].MaxPoints);
-    }
-
-    [Fact]
-    public async Task Submit_RoundTripsTheSameShapeBack()
-    {
-        var uow = new InMemoryUnitOfWork();
-        var service = TestHelpers.CreateRubricService(uow);
-
-        var submitted = TestHelpers.SampleRubric();
-        var result = await service.SubmitAsync(submitted, null);
-
-        var returned = result.Rubric!;
-
-        Assert.Equal(submitted.Id, returned.RubricKey);
-        Assert.Equal(submitted.Title, returned.Title);
-        Assert.Equal(3, returned.Criteria.Count);
-
-        // Labels, points and descriptions all survive
-        var firstLevel = returned.Criteria[0].Levels[0];
-        Assert.Equal("Strong", firstLevel.Label);
-        Assert.Equal(40, firstLevel.Points);
-        Assert.Equal("Clear, arguable thesis sustained throughout.", firstLevel.Description);
-    }
-
-    [Fact]
-    public async Task Submit_RejectsDuplicateCriterionIds()
-    {
-        var uow = new InMemoryUnitOfWork();
-        var service = TestHelpers.CreateRubricService(uow);
-
-        var payload = TestHelpers.SampleRubric();
-        payload.Criteria[1].Id = "thesis";
-
-        var result = await service.SubmitAsync(payload, null);
-
-        Assert.False(result.Succeeded);
-        Assert.Contains(result.Errors, e => e.Contains("reuses the id 'thesis'"));
-        Assert.Empty(uow.RubricRows);
-    }
-
-    [Fact]
-    public async Task Submit_RejectsLevelsThatAreNotInDescendingOrder()
-    {
-        var uow = new InMemoryUnitOfWork();
-        var service = TestHelpers.CreateRubricService(uow);
-
-        var payload = TestHelpers.SampleRubric();
-        // Weak is worth more than Strong, which is the wrong way round
-        payload.Criteria[0].Levels[0].Points = 5;
-        payload.Criteria[0].Levels[2].Points = 40;
-
-        var result = await service.SubmitAsync(payload, null);
-
-        Assert.False(result.Succeeded);
-        Assert.Contains(result.Errors, e => e.Contains("from the highest points to the lowest"));
-    }
-
-    [Fact]
-    public async Task Submit_RejectsNonPositivePoints()
-    {
-        var uow = new InMemoryUnitOfWork();
-        var service = TestHelpers.CreateRubricService(uow);
-
-        var payload = TestHelpers.SampleRubric();
-        payload.Criteria[0].Levels[1].Points = 0;
-
-        var result = await service.SubmitAsync(payload, null);
-
-        Assert.False(result.Succeeded);
-        Assert.Contains(result.Errors, e => e.Contains("must be worth at least 1 point"));
-    }
-
-    [Fact]
-    public async Task Submit_RejectsACriterionWithoutLevels()
-    {
-        var uow = new InMemoryUnitOfWork();
-        var service = TestHelpers.CreateRubricService(uow);
-
-        var payload = TestHelpers.SampleRubric();
-        payload.Criteria[0].Levels = [];
-
-        var result = await service.SubmitAsync(payload, null);
-
-        Assert.False(result.Succeeded);
-        Assert.Contains(result.Errors, e => e.Contains("has no levels"));
-    }
-
-    [Fact]
-    public async Task Submit_ReportsEveryProblemAtOnce()
-    {
-        var uow = new InMemoryUnitOfWork();
-        var service = TestHelpers.CreateRubricService(uow);
-
-        var payload = TestHelpers.SampleRubric();
-        payload.Criteria[0].Levels[0].Points = 0;
-        payload.Criteria[1].Levels = [];
-
-        var result = await service.SubmitAsync(payload, null);
-
-        // Two separate problems, not just the first one found
-        Assert.True(result.Errors.Count >= 2, $"expected several errors, got: {string.Join(" | ", result.Errors)}");
-    }
-
-    [Fact]
-    public async Task Submit_RespectsTheConfiguredLimits()
-    {
-        var uow = new InMemoryUnitOfWork();
-
-        var options = TestHelpers.DefaultRubricOptions();
-        options.MaxLevelsPerCriterion = 2;
-
-        var service = TestHelpers.CreateRubricService(uow, options);
-
-        var result = await service.SubmitAsync(TestHelpers.SampleRubric(), null);
-
-        Assert.False(result.Succeeded);
-        Assert.Contains(result.Errors, e => e.Contains("at most 2 are allowed"));
-    }
-
-    [Fact]
-    public async Task Submit_ReplacesTheRubricWhenTheSameKeyComesBack()
+    public async Task Create_StoresTheRubricWithItsOwner()
     {
         var uow = new InMemoryUnitOfWork();
         var service = TestHelpers.CreateRubricService(uow);
         var userId = Guid.NewGuid();
 
-        var first = await service.SubmitAsync(TestHelpers.SampleRubric(), userId);
+        var created = await service.CreateAsync(TestHelpers.SampleRubric(), userId);
 
-        var edited = TestHelpers.SampleRubric();
-        edited.Title = "Research Essay v2";
-        var second = await service.SubmitAsync(edited, userId);
-
-        // Same rubric, updated in place rather than duplicated
-        Assert.Equal(first.Rubric!.Id, second.Rubric!.Id);
-        Assert.Single(uow.RubricRows);
-        Assert.Equal("Research Essay v2", uow.RubricRows[0].Title);
+        var stored = Assert.Single(uow.RubricRows);
+        Assert.Equal(created.Id, stored.Id);
+        Assert.Equal("ECON-101", stored.CourseId);
+        Assert.Equal("Economics", stored.CourseName);
+        Assert.Equal(userId, stored.UploadedByUserId);
     }
 
     [Fact]
-    public async Task Submit_KeepsTheSameKeyApartForDifferentUsers()
+    public async Task Create_TrimsTheSubmittedText()
     {
         var uow = new InMemoryUnitOfWork();
         var service = TestHelpers.CreateRubricService(uow);
 
-        await service.SubmitAsync(TestHelpers.SampleRubric(), Guid.NewGuid());
-        await service.SubmitAsync(TestHelpers.SampleRubric(), Guid.NewGuid());
+        var payload = TestHelpers.SampleRubric();
+        payload.CourseName = "  Economics  ";
+        payload.CourseId = "  ECON-101  ";
 
-        // Two users may both own a rubric called rub_essay
-        Assert.Equal(2, uow.RubricRows.Count);
+        await service.CreateAsync(payload, Guid.NewGuid());
+
+        var stored = Assert.Single(uow.RubricRows);
+        Assert.Equal("Economics", stored.CourseName);
+        Assert.Equal("ECON-101", stored.CourseId);
     }
 
     [Fact]
-    public async Task Submit_KeepsTheStoredRubricWhenAResubmissionIsRejected()
+    public async Task Create_RoundTripsTheRubricContentBack()
+    {
+        var uow = new InMemoryUnitOfWork();
+        var service = TestHelpers.CreateRubricService(uow);
+
+        var payload = TestHelpers.SampleRubric();
+        var created = await service.CreateAsync(payload, Guid.NewGuid());
+
+        Assert.Equal(payload.RubricContent.Trim(), created.RubricContent);
+    }
+
+    [Fact]
+    public async Task GetById_ReturnsTheStoredRubric()
     {
         var uow = new InMemoryUnitOfWork();
         var service = TestHelpers.CreateRubricService(uow);
         var userId = Guid.NewGuid();
 
-        var first = await service.SubmitAsync(TestHelpers.SampleRubric(), userId);
+        var created = await service.CreateAsync(TestHelpers.SampleRubric(), userId);
 
-        // A broken edit of an existing rubric must not cost the user the old one
-        var broken = TestHelpers.SampleRubric();
-        broken.Title = "Research Essay v2";
-        broken.Criteria[0].Levels[0].Points = -5;
+        var found = await service.GetByIdAsync(created.Id, userId);
 
-        var rejected = await service.SubmitAsync(broken, userId);
+        Assert.NotNull(found);
+        Assert.Equal(created.Id, found.Id);
+        Assert.Equal(created.CourseId, found.CourseId);
+    }
 
-        Assert.False(rejected.Succeeded);
+    [Fact]
+    public async Task GetById_HidesARubricOwnedBySomebodyElse()
+    {
+        var uow = new InMemoryUnitOfWork();
+        var service = TestHelpers.CreateRubricService(uow);
 
-        var stored = Assert.Single(uow.RubricRows);
-        Assert.Equal(first.Rubric!.Id, stored.Id);
-        Assert.Equal("Research Essay", stored.Title);
+        var created = await service.CreateAsync(TestHelpers.SampleRubric(), Guid.NewGuid());
+
+        Assert.Null(await service.GetByIdAsync(created.Id, Guid.NewGuid()));
     }
 
     [Fact]
@@ -220,16 +83,101 @@ public class RubricServiceTests
     {
         var uow = new InMemoryUnitOfWork();
         var service = TestHelpers.CreateRubricService(uow);
-
         var mine = Guid.NewGuid();
-        await service.SubmitAsync(TestHelpers.SampleRubric(), mine);
-        await service.SubmitAsync(TestHelpers.SampleRubric(), Guid.NewGuid());
+
+        await service.CreateAsync(TestHelpers.SampleRubric(), mine);
+        await service.CreateAsync(TestHelpers.SampleRubric(), Guid.NewGuid());
 
         var page = await service.ListAsync(mine, 1, 20);
 
         Assert.Equal(1, page.TotalCount);
         Assert.Single(page.Items);
-        Assert.Equal("rub_essay", page.Items[0].RubricKey);
+    }
+
+    [Fact]
+    public async Task List_PagesTheRubricsNewestFirst()
+    {
+        var uow = new InMemoryUnitOfWork();
+        var service = TestHelpers.CreateRubricService(uow);
+        var userId = Guid.NewGuid();
+
+        uow.RubricRows.AddRange(
+            SeedRubric(userId, "ECON-101", DateTime.UtcNow.AddMinutes(-10)),
+            SeedRubric(userId, "ECON-102", DateTime.UtcNow));
+
+        var page = await service.ListAsync(userId, 1, 1);
+
+        Assert.Equal(2, page.TotalCount);
+        Assert.Equal(2, page.TotalPages);
+        Assert.Equal("ECON-102", Assert.Single(page.Items).CourseId);
+    }
+
+    [Fact]
+    public async Task List_LeavesTheRubricContentOut()
+    {
+        var uow = new InMemoryUnitOfWork();
+        var service = TestHelpers.CreateRubricService(uow);
+        var userId = Guid.NewGuid();
+
+        await service.CreateAsync(TestHelpers.SampleRubric(), userId);
+
+        var page = await service.ListAsync(userId, 1, 20);
+
+        // The summary only carries the header fields, the content is fetched
+        // through the single rubric endpoint
+        Assert.Equal("ECON-101", Assert.Single(page.Items).CourseId);
+    }
+
+    [Fact]
+    public async Task Update_ReplacesTheCourseAndTheContent()
+    {
+        var uow = new InMemoryUnitOfWork();
+        var service = TestHelpers.CreateRubricService(uow);
+        var userId = Guid.NewGuid();
+
+        var created = await service.CreateAsync(TestHelpers.SampleRubric(), userId);
+
+        var edit = TestHelpers.SampleRubric();
+        edit.CourseName = "Economics II";
+        edit.RubricContent = "{\"criteria\":[]}";
+
+        var result = await service.UpdateAsync(created.Id, edit, userId);
+
+        Assert.True(result.Succeeded);
+        Assert.Equal("Economics II", result.Rubric!.CourseName);
+        Assert.Equal("{\"criteria\":[]}", uow.RubricRows[0].RubricContent);
+    }
+
+    [Fact]
+    public async Task Update_KeepsTheIdTheOwnerAndTheCreationTime()
+    {
+        var uow = new InMemoryUnitOfWork();
+        var service = TestHelpers.CreateRubricService(uow);
+        var userId = Guid.NewGuid();
+
+        var created = await service.CreateAsync(TestHelpers.SampleRubric(), userId);
+        var result = await service.UpdateAsync(created.Id, TestHelpers.SampleRubric(), userId);
+
+        var stored = Assert.Single(uow.RubricRows);
+        Assert.Equal(created.Id, stored.Id);
+        Assert.Equal(userId, stored.UploadedByUserId);
+        Assert.Equal(created.CreatedAt, stored.CreatedAt);
+        Assert.Equal(result.Rubric!.UpdatedAt, stored.UpdatedAt);
+    }
+
+    [Fact]
+    public async Task Update_RefusesARubricOwnedBySomebodyElse()
+    {
+        var uow = new InMemoryUnitOfWork();
+        var service = TestHelpers.CreateRubricService(uow);
+
+        var created = await service.CreateAsync(TestHelpers.SampleRubric(), Guid.NewGuid());
+
+        var result = await service.UpdateAsync(created.Id, TestHelpers.SampleRubric(), Guid.NewGuid());
+
+        Assert.False(result.Succeeded);
+        Assert.Null(result.Rubric);
+        Assert.Single(uow.RubricRows);
     }
 
     [Fact]
@@ -237,10 +185,11 @@ public class RubricServiceTests
     {
         var uow = new InMemoryUnitOfWork();
         var service = TestHelpers.CreateRubricService(uow);
+        var userId = Guid.NewGuid();
 
-        var submitted = await service.SubmitAsync(TestHelpers.SampleRubric(), null);
+        var created = await service.CreateAsync(TestHelpers.SampleRubric(), userId);
 
-        Assert.True(await service.DeleteAsync(submitted.Rubric!.Id));
+        Assert.True((await service.DeleteAsync(created.Id, userId)).Succeeded);
         Assert.Empty(uow.RubricRows);
     }
 
@@ -250,10 +199,19 @@ public class RubricServiceTests
         var uow = new InMemoryUnitOfWork();
         var service = TestHelpers.CreateRubricService(uow);
 
-        var owner = Guid.NewGuid();
-        var submitted = await service.SubmitAsync(TestHelpers.SampleRubric(), owner);
+        var created = await service.CreateAsync(TestHelpers.SampleRubric(), Guid.NewGuid());
 
-        Assert.False(await service.DeleteAsync(submitted.Rubric!.Id, Guid.NewGuid()));
+        Assert.False((await service.DeleteAsync(created.Id, Guid.NewGuid())).Succeeded);
         Assert.Single(uow.RubricRows);
     }
+
+    private static Rubric SeedRubric(Guid userId, string courseId, DateTime createdAt) => new()
+    {
+        CourseName = "Economics",
+        CourseId = courseId,
+        RubricContent = "{}",
+        UploadedByUserId = userId,
+        CreatedAt = createdAt,
+        UpdatedAt = createdAt
+    };
 }
