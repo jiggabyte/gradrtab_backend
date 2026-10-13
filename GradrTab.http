@@ -3,7 +3,7 @@
 @documentId = d2ec6cc7-a60e-4650-8c60-c2f95df25571
 @resetToken = 4gJOOXHbrNkejPsksKs4-oRgfVmiix36XhZ65zJbsr4
 @rubricId = 0e097997-a6aa-4dbd-b8ba-e70b633c821a
-@submissionId = 4f68572e-a30f-46aa-97af-4ba18ce6a0e1
+@submissionId = b4b3baee-03d0-4a93-9cfd-935a914212bd
 GET {{GradrTab_HostAddress}}/api/v1/health
 Accept: application/json
 
