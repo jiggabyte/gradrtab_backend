@@ -16,15 +16,21 @@ public class SubmissionsController : ControllerBase
 {
     private readonly ISubmissionService _submissionService;
     private readonly IGradingService _gradingService;
+    private readonly IGradingEmailService _gradingEmailService;
+    private readonly IAiDetectionService _detectionService;
     private readonly ILogger<SubmissionsController> _logger;
 
     public SubmissionsController(
         ISubmissionService submissionService,
         IGradingService gradingService,
+        IGradingEmailService gradingEmailService,
+        IAiDetectionService detectionService,
         ILogger<SubmissionsController> logger)
     {
         _submissionService = submissionService;
         _gradingService = gradingService;
+        _gradingEmailService = gradingEmailService;
+        _detectionService = detectionService;
         _logger = logger;
     }
 
@@ -142,6 +148,111 @@ public class SubmissionsController : ControllerBase
 
         return StatusCode(
             result.StatusCode ?? StatusCodes.Status422UnprocessableEntity,
+            new { message = result.ErrorMessage });
+    }
+
+    // POST /api/v1/submissions/{id}/ai-detection
+    // Sends the assessment text behind the submission to the AI and answers
+    // with the estimated AI share. The body is optional, it only carries
+    // overrides: { "model": "...", "instructions": "..." }
+    [HttpPost("{id:guid}/ai-detection")]
+    public async Task<ActionResult<AiDetectionResponseDto>> DetectAi(
+        Guid id,
+        [FromBody] AiDetectionRequestDto? request,
+        CancellationToken cancellationToken)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null)
+        {
+            return Unauthorized();
+        }
+
+        var result = await _detectionService.DetectForSubmissionAsync(
+            id,
+            request ?? new AiDetectionRequestDto(),
+            userId.Value,
+            cancellationToken);
+
+        if (result.Succeeded && result.Detection is not null)
+        {
+            return Ok(result.Detection);
+        }
+
+        _logger.LogWarning(
+            "AI detection for submission {SubmissionId} was refused with {Status}: {Error}",
+            id, result.StatusCode, result.ErrorMessage);
+
+        return StatusCode(
+            result.StatusCode ?? StatusCodes.Status422UnprocessableEntity,
+            new { message = result.ErrorMessage });
+    }
+
+    // POST /api/v1/submissions/{id}/email-grading-result
+    // Mails the stored grading result of the submission to a grader.
+    // Body: { "graderEmail": "grader@example.com" }
+    // The mail carries the submission details, the rubric details and the
+    // evaluation. Answered with 400 for a bad address, 404 for a missing
+    // submission, 422 when there is no grade to send yet, 503 when SMTP is
+    // not configured and 502 when the SMTP server refused the message.
+    [HttpPost("{id:guid}/email-grading-result")]
+    public async Task<IActionResult> EmailGradingResult(
+        Guid id,
+        [FromBody] GradingEmailRequestDto? request,
+        CancellationToken cancellationToken)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null)
+        {
+            return Unauthorized();
+        }
+
+        // A missing body still fails model validation the same way, without a
+        // NullReferenceException. [ApiController] answers 400 for it only when
+        // the parameter is non-nullable, so handle null here explicitly.
+        var graderEmail = request?.GraderEmail?.Trim() ?? string.Empty;
+
+        if (string.IsNullOrWhiteSpace(graderEmail))
+        {
+            // ModelState already holds the [Required]/[EmailAddress] errors when
+            // a body was sent; surface those instead of a generic message.
+            if (!ModelState.IsValid)
+            {
+                return ValidationProblem(ModelState);
+            }
+
+            return BadRequest(new
+            {
+                message = "Send a valid grader email address, for example { \"graderEmail\": \"grader@example.com\" }."
+            });
+        }
+
+        var result = await _gradingEmailService.SendGradingResultAsync(
+            id,
+            graderEmail,
+            userId.Value,
+            cancellationToken);
+
+        if (result.Succeeded && result.ToEmail is not null && result.SubmissionId is not null)
+        {
+            return Ok(new GradingEmailResponseDto(
+                result.ToEmail,
+                result.SubmissionId.Value,
+                $"The grading result of submission {result.SubmissionId} was mailed to {result.ToEmail}."));
+        }
+
+        // 400 from model validation belongs to the request shape, everything
+        // else (400 bad address / 404 / 422 / 503 / 502) comes from the service.
+        if (!ModelState.IsValid && result.StatusCode == StatusCodes.Status400BadRequest)
+        {
+            return ValidationProblem(ModelState);
+        }
+
+        _logger.LogWarning(
+            "Mailing grading result of submission {SubmissionId} to {Recipient} was refused with {StatusCode}: {Error}",
+            id, graderEmail, result.StatusCode, result.ErrorMessage);
+
+        return StatusCode(
+            result.StatusCode ?? StatusCodes.Status502BadGateway,
             new { message = result.ErrorMessage });
     }
 

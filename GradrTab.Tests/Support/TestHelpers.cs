@@ -101,13 +101,35 @@ public static class TestHelpers
     public static SubmissionsController CreateSubmissionsController(
         InMemoryUnitOfWork unitOfWork,
         FakeAiService? aiService = null,
-        Guid? userId = null) =>
+        Guid? userId = null,
+        IEmailSender? emailSender = null,
+        IAiDetectionService? detectionService = null) =>
         TestHelpers.AttachUser(
             new SubmissionsController(
                 CreateSubmissionService(unitOfWork),
                 CreateGradingService(unitOfWork, aiService ?? FakeAiService.AnsweringWith("{}")),
+                CreateGradingEmailService(unitOfWork, emailSender ?? new FakeEmailSender()),
+                detectionService ?? CreateAiDetectionService(unitOfWork, aiService),
                 NullLogger<SubmissionsController>.Instance),
             userId);
+
+    public static IGradingEmailService CreateGradingEmailService(
+        InMemoryUnitOfWork unitOfWork,
+        IEmailSender? emailSender = null) =>
+        new GradingEmailService(
+            unitOfWork,
+            emailSender ?? new FakeEmailSender(),
+            NullLogger<GradingEmailService>.Instance);
+
+    public static IAiDetectionService CreateAiDetectionService(
+        InMemoryUnitOfWork unitOfWork,
+        FakeAiService? aiService = null,
+        AiOptions? options = null) =>
+        new AiDetectionService(
+            unitOfWork,
+            aiService ?? FakeAiService.AnsweringWith("{}"),
+            Options.Create(options ?? DefaultGradingAiOptions()),
+            NullLogger<AiDetectionService>.Instance);
 
     // Puts a name identifier claim on the controller context
     public static T AttachUser<T>(T controller, Guid? userId) where T : ControllerBase
@@ -219,9 +241,21 @@ public static class TestHelpers
             NullLogger<OpenRouterAiService>.Instance);
 
     // Mirrors DocumentsControllerTests: the controller reads the user id from the claims
-    public static AiController CreateAiController(IAiService service, AiOptions? options = null, Guid? userId = null)
+    public static AiController CreateAiController(
+        IAiService service,
+        AiOptions? options = null,
+        Guid? userId = null,
+        IAiDetectionService? detectionService = null)
     {
-        var controller = new AiController(service, AiOptionsWrapper(options), NullLogger<AiController>.Instance);
+        var controller = new AiController(
+            service,
+            detectionService ?? new AiDetectionService(
+                new InMemoryUnitOfWork(),
+                service,
+                AiOptionsWrapper(options),
+                NullLogger<AiDetectionService>.Instance),
+            AiOptionsWrapper(options),
+            NullLogger<AiController>.Instance);
 
         var claims = new List<Claim>();
         if (userId is not null)

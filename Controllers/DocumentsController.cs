@@ -20,6 +20,7 @@ public class DocumentsController : ControllerBase
 {
     private readonly IUnitOfWork _unitOfWork;
     private readonly IDocumentProcessingService _processingService;
+    private readonly IAiDetectionService _detectionService;
     private readonly IFileStorageService _storage;
     private readonly DocumentProcessingOptions _options;
     private readonly ILogger<DocumentsController> _logger;
@@ -27,12 +28,14 @@ public class DocumentsController : ControllerBase
     public DocumentsController(
         IUnitOfWork unitOfWork,
         IDocumentProcessingService processingService,
+        IAiDetectionService detectionService,
         IFileStorageService storage,
         IOptions<DocumentProcessingOptions> options,
         ILogger<DocumentsController> logger)
     {
         _unitOfWork = unitOfWork;
         _processingService = processingService;
+        _detectionService = detectionService;
         _storage = storage;
         _options = options.Value;
         _logger = logger;
@@ -335,6 +338,43 @@ public class DocumentsController : ControllerBase
         }
 
         return Ok(result);
+    }
+
+    // POST /api/v1/documents/{id}/ai-detection
+    // Sends the extracted text of the document to the AI and answers with the
+    // estimated AI share: aiPercentage, verdict, confidence and signals.
+    // The body is optional, it only carries overrides:
+    // { "model": "...", "instructions": "non-native writers" }
+    [HttpPost("{id:guid}/ai-detection")]
+    public async Task<ActionResult<AiDetectionResponseDto>> DetectAi(
+        Guid id,
+        [FromBody] AiDetectionRequestDto? request,
+        CancellationToken cancellationToken)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null)
+        {
+            return Unauthorized();
+        }
+
+        var result = await _detectionService.DetectForDocumentAsync(
+            id,
+            request ?? new AiDetectionRequestDto(),
+            userId.Value,
+            cancellationToken);
+
+        if (result.Succeeded && result.Detection is not null)
+        {
+            return Ok(result.Detection);
+        }
+
+        _logger.LogWarning(
+            "AI detection for document {DocumentId} was refused with {Status}: {Error}",
+            id, result.StatusCode, result.ErrorMessage);
+
+        return StatusCode(
+            result.StatusCode ?? StatusCodes.Status422UnprocessableEntity,
+            new { message = result.ErrorMessage });
     }
 
     // DELETE /api/v1/documents/{id}

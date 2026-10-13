@@ -1,9 +1,9 @@
 @GradrTab_HostAddress = http://localhost:5120
-@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1laWRlbnRpZmllciI6IjE5OWM2ZDVlLTIwYzgtNDRiYi04MDViLTlhYTkxNDVmNGIxMiIsImh0dHA6Ly9zY2hlbWFzLnhtbHNvYXAub3JnL3dzLzIwMDUvMDUvaWRlbnRpdHkvY2xhaW1zL2VtYWlsYWRkcmVzcyI6ImppZ2dhLmUxMEBnbWFpbC5jb20iLCJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9naXZlbm5hbWUiOiJKaWdnYSIsImh0dHA6Ly9zY2hlbWFzLnhtbHNvYXAub3JnL3dzLzIwMDUvMDUvaWRlbnRpdHkvY2xhaW1zL3N1cm5hbWUiOiJCeXRlIiwiZXhwIjoxNzkwNTA0MjQ2LCJpc3MiOiJHcmFkclRhYiIsImF1ZCI6IkdyYWRyVGFiVXNlcnMifQ.IjVWaVmj7XsBrfoPmLDf4ro_BfMJ4BQnvprqFn0G3YU
-@documentId = 0384ee4c-56be-461a-89f7-fecc51546b42
+@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1laWRlbnRpZmllciI6IjE5OWM2ZDVlLTIwYzgtNDRiYi04MDViLTlhYTkxNDVmNGIxMiIsImh0dHA6Ly9zY2hlbWFzLnhtbHNvYXAub3JnL3dzLzIwMDUvMDUvaWRlbnRpdHkvY2xhaW1zL2VtYWlsYWRkcmVzcyI6ImppZ2dhLmUxMEBnbWFpbC5jb20iLCJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9naXZlbm5hbWUiOiJKaWdnYSIsImh0dHA6Ly9zY2hlbWFzLnhtbHNvYXAub3JnL3dzLzIwMDUvMDUvaWRlbnRpdHkvY2xhaW1zL3N1cm5hbWUiOiJCeXRlIiwiZXhwIjoxNzkxOTEzMzQ4LCJpc3MiOiJHcmFkclRhYiIsImF1ZCI6IkdyYWRyVGFiVXNlcnMifQ.zbURci_89wNDm9TcJaQhf2XzWegGo_OTIszQLKvKAC0
+@documentId = d2ec6cc7-a60e-4650-8c60-c2f95df25571
 @resetToken = 4gJOOXHbrNkejPsksKs4-oRgfVmiix36XhZ65zJbsr4
-@rubricId = 00000000-0000-0000-0000-000000000000
-@submissionId = 00000000-0000-0000-0000-000000000000
+@rubricId = 0e097997-a6aa-4dbd-b8ba-e70b633c821a
+@submissionId = 4f68572e-a30f-46aa-97af-4ba18ce6a0e1
 GET {{GradrTab_HostAddress}}/api/v1/health
 Accept: application/json
 
@@ -82,10 +82,10 @@ Authorization: Bearer {{token}}
 Content-Type: multipart/form-data; boundary=----GradrTabBoundary
 
 ------GradrTabBoundary
-Content-Disposition: form-data; name="files"; filename="students.csv"
-Content-Type: text/csv
+Content-Disposition: form-data; name="files"; filename="economics.docx"
+Content-Type: text/docx
 
-< ./samples/students.csv
+< ./samples/economics.docx
 ------GradrTabBoundary--
 
 ###
@@ -123,6 +123,16 @@ Authorization: Bearer {{token}}
 # Read the stored copy again after an extractor changed
 POST {{GradrTab_HostAddress}}/api/v1/documents/{{documentId}}/reprocess
 Authorization: Bearer {{token}}
+
+###
+
+# Check how much of a document's extracted text reads as AI-generated.
+# The body is optional, it only carries overrides.
+POST {{GradrTab_HostAddress}}/api/v1/documents/{{documentId}}/ai-detection
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{}
 
 ###
 
@@ -220,6 +230,29 @@ Content-Type: application/json
 
 ###
 
+# Check how much of the assessment behind a submission reads as AI-generated.
+# The body is optional, it only carries overrides:
+# { "model": "openai/gpt-4o-mini", "instructions": "non-native writers" }
+POST {{GradrTab_HostAddress}}/api/v1/submissions/{{submissionId}}/ai-detection
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{}
+
+###
+
+# Mail the stored grading result of a submission to a grader. The mail carries
+# the submission details, the rubric details and the evaluation, so grade first.
+POST {{GradrTab_HostAddress}}/api/v1/submissions/{{submissionId}}/email-grading-result
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "graderEmail": "jigga.e10@gmail.com"
+}
+
+###
+
 # Delete a submission
 DELETE {{GradrTab_HostAddress}}/api/v1/submissions/{{submissionId}}
 Authorization: Bearer {{token}}
@@ -268,6 +301,18 @@ Content-Type: application/json
   "messages": [
     { "role": "user", "content": "Name three rubric criteria for an essay." }
   ]
+}
+
+###
+
+# Check raw assessment text for AI usage without a stored document.
+# Returns the aiPercentage, verdict, confidence and signals.
+POST {{GradrTab_HostAddress}}/api/v1/ai/detect
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "text": "Paste at least 200 characters of the assessment here..."
 }
 
 ###
